@@ -2,7 +2,7 @@ import { existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { loadEnvFile } from "node:process";
 import { fileURLToPath } from "node:url";
-import { loadDeploymentManifest } from "@wisp/shared";
+import { loadDeploymentManifest } from "@wisp/shared/node";
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "../../..");
 const rootEnv = join(repoRoot, ".env");

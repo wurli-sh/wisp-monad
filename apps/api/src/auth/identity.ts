@@ -93,42 +93,105 @@ export async function syncIdentity(
     provider: "google" | "x" | "email";
     normalized: string;
     display: string;
+    providerSubject: string;
   }> = [];
 
   for (const identity of user.identities ?? []) {
     const provider = identity.provider;
+    const subject =
+      typeof identity.id === "string" && identity.id.length > 0
+        ? identity.id
+        : undefined;
     if (provider === "google") {
       const email = identity.identity_data?.email as string | undefined;
       if (email) {
         const norm = normalizeHandle("email", email);
-        identities.push({ provider: "google", normalized: norm.normalized, display: norm.display });
+        identities.push({
+          provider: "google",
+          normalized: norm.normalized,
+          display: norm.display,
+          providerSubject: norm.normalized,
+        });
       }
     } else if (provider === "email") {
       const email = identity.identity_data?.email as string | undefined;
       if (email) {
         const norm = normalizeHandle("email", email);
-        identities.push({ provider: "email", normalized: norm.normalized, display: norm.display });
+        identities.push({
+          provider: "email",
+          normalized: norm.normalized,
+          display: norm.display,
+          providerSubject: norm.normalized,
+        });
       }
     } else if (provider === "twitter" || provider === "x") {
       const handle =
         (identity.identity_data?.preferred_username as string | undefined) ??
         (identity.identity_data?.user_name as string | undefined);
-      if (handle) {
+      const xSubject =
+        subject ??
+        (identity.identity_data?.provider_id as string | undefined) ??
+        (identity.identity_data?.sub as string | undefined);
+      if (handle && xSubject) {
         const norm = normalizeHandle("x", handle);
-        identities.push({ provider: "x", normalized: norm.normalized, display: norm.display });
+        identities.push({
+          provider: "x",
+          normalized: norm.normalized,
+          display: norm.display,
+          providerSubject: String(xSubject),
+        });
       }
     }
   }
 
   if (user.email && !identities.some((i) => i.provider === "email")) {
     const norm = normalizeHandle("email", user.email);
-    identities.push({ provider: "email", normalized: norm.normalized, display: norm.display });
+    identities.push({
+      provider: "email",
+      normalized: norm.normalized,
+      display: norm.display,
+      providerSubject: norm.normalized,
+    });
   }
 
   for (const id of identities) {
+    const { data: bySubject } = await db
+      .from("handles")
+      .select("id,user_id,normalized")
+      .eq("provider", id.provider)
+      .eq("provider_subject", id.providerSubject)
+      .maybeSingle();
+
+    if (bySubject) {
+      if (bySubject.user_id !== user.id) {
+        const err = new Error("identity_already_linked");
+        (err as Error & { code: string }).code = "identity_already_linked";
+        throw err;
+      }
+      if (bySubject.normalized !== id.normalized) {
+        const { data: collision } = await db
+          .from("handles")
+          .select("id,user_id")
+          .eq("provider", id.provider)
+          .eq("normalized", id.normalized)
+          .maybeSingle();
+        if (collision && collision.id !== bySubject.id) {
+          const err = new Error("identity_already_linked");
+          (err as Error & { code: string }).code = "identity_already_linked";
+          throw err;
+        }
+        const { error: renameErr } = await db
+          .from("handles")
+          .update({ normalized: id.normalized, display: id.display })
+          .eq("id", bySubject.id);
+        if (renameErr) throw renameErr;
+      }
+      continue;
+    }
+
     const { data: existing } = await db
       .from("handles")
-      .select("id,user_id")
+      .select("id,user_id,provider_subject")
       .eq("provider", id.provider)
       .eq("normalized", id.normalized)
       .maybeSingle();
@@ -145,6 +208,7 @@ export async function syncIdentity(
         provider: id.provider,
         normalized: id.normalized,
         display: id.display,
+        provider_subject: id.providerSubject,
       });
       if (insertErr) {
         if (insertErr.code === "23505") {
@@ -154,6 +218,16 @@ export async function syncIdentity(
         }
         throw insertErr;
       }
+    } else if (!existing.provider_subject) {
+      const { error: subjectErr } = await db
+        .from("handles")
+        .update({ provider_subject: id.providerSubject, display: id.display })
+        .eq("id", existing.id);
+      if (subjectErr) throw subjectErr;
+    } else if (existing.provider_subject !== id.providerSubject) {
+      const err = new Error("identity_already_linked");
+      (err as Error & { code: string }).code = "identity_already_linked";
+      throw err;
     }
   }
 }

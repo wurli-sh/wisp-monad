@@ -493,8 +493,7 @@
                       "denomination",
                       "secret",
                       "recipientKeyDigest",
-                      "commitment",
-                      "depositTxHash"
+                      "commitment"
                     ],
                     "additionalProperties": false
                   },

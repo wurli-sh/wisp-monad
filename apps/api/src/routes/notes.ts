@@ -96,7 +96,6 @@ export async function registerNotesRoutes(
         "id,recipient_pubkey,ephemeral_pubkey,nonce,ciphertext,created_at,claimed_at",
       )
       .eq("recipient_pubkey", inbox)
-      .is("claimed_at", null)
       .order("created_at", { ascending: false })
       .limit(100);
 

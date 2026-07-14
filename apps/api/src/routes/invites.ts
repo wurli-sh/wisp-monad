@@ -3,6 +3,7 @@ import type { FastifyInstance } from "fastify";
 import { noteCommitment, noteNullifier } from "@wisp/crypto";
 import {
   apiError,
+  buildClaimUrl,
   fieldToHex,
   hexToField,
   inviteCreateSchema,
@@ -188,7 +189,7 @@ export async function registerInviteRoutes(
         crypto_key_version: encryptedPayload.version,
         deposit_chain_id: claimPayload.chainId,
         deposit_pool: claimPayload.pool.toLowerCase(),
-        deposit_tx_hash: claimPayload.depositTxHash.toLowerCase(),
+        deposit_tx_hash: claimPayload.depositTxHash!.toLowerCase(),
         deposit_log_index: parsed.data.logIndex,
         expires_at: parsed.data.expiresAt ?? null,
       })
@@ -202,8 +203,7 @@ export async function registerInviteRoutes(
     }
 
     const webOrigin = deps.config.corsOrigins[0] ?? deps.config.apiOrigin;
-    const encodedPayload = Buffer.from(payloadJson, "utf8").toString("base64url");
-    const claimUrl = `${webOrigin.replace(/\/$/, "")}/claim#p=${encodedPayload}`;
+    const claimUrl = buildClaimUrl(webOrigin, claimPayload as import("@wisp/shared").ClaimPayloadV1);
     let providerMessageId: string;
     try {
       const sent = await sendClaimEmail({
