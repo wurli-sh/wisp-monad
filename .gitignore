@@ -1,2 +1,47 @@
+# Dependencies
+node_modules/
+**/node_modules/
+
+# Env / secrets
+.env
+.env.*
+.wisp-notes/
+.secrets/
+!.env.example
+*.pem
+
+# Foundry
+contracts/cache/
+contracts/out/
+contracts/broadcast/
+
+# Circuit ceremony toxic waste / intermediates
+circuits/build/
+circuits/pot/
+circuits/**/*.ptau
+circuits/**/*contribution*
+circuits/**/*.wtns
+!circuits/artifacts/
+circuits/artifacts/**/*.zkey
+!circuits/artifacts/claim/claim_final.zkey
+!circuits/artifacts/.gitkeep
+
+# OS / IDE
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# Local reference / tooling (never ship)
 ref/
+.superstack/
 spark-hackathon.md
+.worktrees/
+worktrees/
+
+# Logs / coverage
+*.log
+coverage/
+dist/
+.next/
+impl-plan.md
