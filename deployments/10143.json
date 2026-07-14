@@ -1,0 +1,61 @@
+{
+  "version": 1,
+  "chainId": 10143,
+  "network": "Monad Testnet",
+  "generatedAt": "2026-07-14T07:33:03.559Z",
+  "deploymentBlock": 44778621,
+  "admin": "0x6F59565B12819D0F9f23ef00b363e71aeEe27Ab9",
+  "token": {
+    "issuer": "Circle",
+    "symbol": "USDC",
+    "decimals": 6,
+    "address": "0x534b2f3A21130d7a60830c2Df862319e593943A3",
+    "explorerUrl": "https://testnet.monadvision.com/address/0x534b2f3A21130d7a60830c2Df862319e593943A3"
+  },
+  "circuitId": "0xb615da4b4eb2693502e7da531e51e7450572c8c2083105ef2f5898b38ad38745",
+  "verifier": {
+    "address": "0x1026346d75D10FEa3340361DC6C288E25DB46C3A",
+    "explorerUrl": "https://testnet.monadvision.com/address/0x1026346d75D10FEa3340361DC6C288E25DB46C3A",
+    "transactionHash": "0x0e6856ef9db33d5c90cc935c9dbfde1671d2704589ec6d7a70b6e7f6a94a33b0",
+    "blockNumber": 44778631
+  },
+  "poseidon": {
+    "address": "0xbAb52Fb2e83C250D7f9e86eEa76E8D49D63C79c3",
+    "explorerUrl": "https://testnet.monadvision.com/address/0xbAb52Fb2e83C250D7f9e86eEa76E8D49D63C79c3",
+    "transactionHash": "0x6033285bdd41583ba80715e40e34b18d7d0095b7d87f461c61b7669c68c1567e",
+    "blockNumber": 44778621
+  },
+  "pools": {
+    "1000000": {
+      "address": "0x919B3eF692eCD2F14d3402Cfe0015E4D7d8D9d3d",
+      "explorerUrl": "https://testnet.monadvision.com/address/0x919B3eF692eCD2F14d3402Cfe0015E4D7d8D9d3d",
+      "transactionHash": "0x1a09d84225b36c8cd8c3f763f8e1a7c95c9e2769ecd9298714f127dc36acd324",
+      "blockNumber": 44778640
+    },
+    "10000000": {
+      "address": "0x3B69E0B1A5Ea9Ab53B474ee087a71B48377D700c",
+      "explorerUrl": "https://testnet.monadvision.com/address/0x3B69E0B1A5Ea9Ab53B474ee087a71B48377D700c",
+      "transactionHash": "0xcd7ad4daeb6b2fb1992ce118af83c204f35aa294c3d57c8134a40940c90cf1e2",
+      "blockNumber": 44778644
+    },
+    "50000000": {
+      "address": "0xb3f5cEC6b9D4462756477c1268E01C8525C6Dc8c",
+      "explorerUrl": "https://testnet.monadvision.com/address/0xb3f5cEC6b9D4462756477c1268E01C8525C6Dc8c",
+      "transactionHash": "0x77dccced4d0c3315afd96c64ba651d42b73eb1db7efa472c81b541808a43b317",
+      "blockNumber": 44778654
+    },
+    "100000000": {
+      "address": "0xe50Ae387881943c7e4149cEF0873cf4D5F37fFD0",
+      "explorerUrl": "https://testnet.monadvision.com/address/0xe50Ae387881943c7e4149cEF0873cf4D5F37fFD0",
+      "transactionHash": "0x4a8414cdd7bb2970587e467031d5ea3fa0de8d49c54bc215531850b4372d3a86",
+      "blockNumber": 44778657
+    }
+  },
+  "circuitArtifacts": {
+    "wasm": "bbfab4d73f49e924c7c455cb8ce50de90b893fc0395da0aeb4baf6ecf10e92cc",
+    "zkey": "4865d817abe5ab98e6f89f9c80f33350d45d8e2e1e78c355a55a86ae1976cdeb",
+    "verificationKey": "408c4bc0b2d6465ad232094a9831528d04f78c3042dc0997382332c76de00355",
+    "solidityVerifier": "bcf75576315031cdcd557655f6a1277c8180399fe4ec36f36f755078fb8a8d80",
+    "r1cs": "d5f17f0ea77ed27dde08cb935c57d805d58a75a4eccc3b412a4affb76bc829df"
+  }
+}

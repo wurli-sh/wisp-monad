@@ -1,0 +1,62 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Wisp Monad Testnet deployment",
+  "type": "object",
+  "required": [
+    "version",
+    "chainId",
+    "network",
+    "deploymentBlock",
+    "admin",
+    "token",
+    "circuitId",
+    "verifier",
+    "poseidon",
+    "pools",
+    "circuitArtifacts"
+  ],
+  "properties": {
+    "version": { "const": 1 },
+    "chainId": { "const": 10143 },
+    "network": { "const": "Monad Testnet" },
+    "deploymentBlock": { "type": "integer", "minimum": 1 },
+    "admin": { "$ref": "#/$defs/address" },
+    "token": {
+      "type": "object",
+      "required": ["issuer", "symbol", "decimals", "address", "explorerUrl"],
+      "properties": {
+        "issuer": { "const": "Circle" },
+        "symbol": { "const": "USDC" },
+        "decimals": { "const": 6 },
+        "address": { "const": "0x534b2f3A21130d7a60830c2Df862319e593943A3" },
+        "explorerUrl": { "type": "string", "format": "uri" }
+      },
+      "additionalProperties": false
+    },
+    "circuitId": { "$ref": "#/$defs/bytes32" },
+    "verifier": { "$ref": "#/$defs/deployedContract" },
+    "poseidon": { "$ref": "#/$defs/deployedContract" },
+    "pools": {
+      "type": "object",
+      "required": ["1000000", "10000000", "50000000", "100000000"],
+      "additionalProperties": { "$ref": "#/$defs/deployedContract" }
+    },
+    "circuitArtifacts": { "type": "object" }
+  },
+  "$defs": {
+    "address": { "type": "string", "pattern": "^0x[0-9a-fA-F]{40}$" },
+    "bytes32": { "type": "string", "pattern": "^0x[0-9a-fA-F]{64}$" },
+    "deployedContract": {
+      "type": "object",
+      "required": ["address", "explorerUrl", "transactionHash", "blockNumber"],
+      "properties": {
+        "address": { "$ref": "#/$defs/address" },
+        "explorerUrl": { "type": "string", "format": "uri" },
+        "transactionHash": { "$ref": "#/$defs/bytes32" },
+        "blockNumber": { "type": "integer", "minimum": 1 }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": true
+}
