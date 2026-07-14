@@ -45,4 +45,5 @@ supabase/.temp/
 coverage/
 dist/
 .next/
+*.tsbuildinfo
 impl-plan.md

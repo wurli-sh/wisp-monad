@@ -19,9 +19,11 @@
     "smoke:phase1": "bash scripts/e2e/phase1-live-smoke.sh",
     "smoke:phase2": "bash scripts/e2e/phase2-api-smoke.sh --require-ready",
     "smoke:phase2:local": "bash scripts/e2e/phase2-api-smoke.sh",
+    "smoke:phase3": "bash scripts/e2e/phase3-web-smoke.sh",
     "preflight:phase2": "bash scripts/e2e/phase2-testnet-preflight.sh",
     "dev:api": "pnpm --filter @wisp/api dev",
     "dev:indexer": "pnpm --filter @wisp/api dev:indexer",
+    "dev:web": "pnpm --filter @wisp/web dev",
     "test:api": "pnpm --filter @wisp/api test",
     "test:e2e": "bash scripts/e2e/phase2-api-smoke.sh --require-ready",
     "check": "pnpm lint && pnpm typecheck && pnpm test && pnpm test:circuits && pnpm test:deployment && pnpm test:contracts && pnpm build"
@@ -33,7 +35,10 @@
     "overrides": {
       "@supabase/auth-js": "2.70.0",
       "underscore": "1.13.8",
-      "ws": "8.21.0"
+      "ws": "8.21.0",
+      "motion-dom": "12.40.0",
+      "motion-utils": "12.39.0",
+      "framer-motion": "12.40.0"
     }
   }
 }
