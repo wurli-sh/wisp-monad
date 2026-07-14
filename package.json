@@ -1,0 +1,26 @@
+{
+  "name": "wisp",
+  "private": true,
+  "packageManager": "pnpm@10.33.0",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "pnpm -r --parallel --if-present run dev",
+    "build": "pnpm -r --if-present run build",
+    "lint": "pnpm -r --if-present run lint",
+    "typecheck": "pnpm -r --if-present run typecheck",
+    "test": "pnpm -r --if-present run test",
+    "test:contracts": "cd contracts && forge test",
+    "test:circuits": "pnpm --filter @wisp/circuits test",
+    "test:deployment": "node --test scripts/deploy/*.test.mjs",
+    "build:circuits": "pnpm --filter @wisp/circuits build",
+    "deploy:testnet": "bash scripts/deploy/monad-testnet.sh",
+    "smoke:phase1": "bash scripts/e2e/phase1-live-smoke.sh",
+    "test:e2e": "node -e \"console.log('e2e stub: Phase 3'); process.exit(0)\"",
+    "check": "pnpm lint && pnpm typecheck && pnpm test && pnpm test:circuits && pnpm test:deployment && pnpm test:contracts && pnpm build"
+  },
+  "devDependencies": {
+    "typescript": "5.8.3"
+  }
+}
