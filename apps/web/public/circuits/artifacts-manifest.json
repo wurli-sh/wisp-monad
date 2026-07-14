@@ -1,0 +1,34 @@
+{
+  "circuit": "claim",
+  "version": 1,
+  "publicSignalOrder": [
+    "root",
+    "nullifier",
+    "recipientAddress",
+    "denomination",
+    "chainId",
+    "poolAddress",
+    "recipientBinding"
+  ],
+  "domainTags": {
+    "NOTE_V1": 1,
+    "NULLIFIER_V1": 2,
+    "RECIPIENT_V1": 3
+  },
+  "treeDepth": 20,
+  "constraintCeiling": 25000,
+  "compilers": {
+    "circom": "2.2.3",
+    "snarkjs": "0.7.5",
+    "prime": "bn128"
+  },
+  "artifacts": {
+    "wasm": "bbfab4d73f49e924c7c455cb8ce50de90b893fc0395da0aeb4baf6ecf10e92cc",
+    "zkey": "4865d817abe5ab98e6f89f9c80f33350d45d8e2e1e78c355a55a86ae1976cdeb",
+    "verificationKey": "408c4bc0b2d6465ad232094a9831528d04f78c3042dc0997382332c76de00355",
+    "solidityVerifier": "bcf75576315031cdcd557655f6a1277c8180399fe4ec36f36f755078fb8a8d80",
+    "r1cs": "d5f17f0ea77ed27dde08cb935c57d805d58a75a4eccc3b412a4affb76bc829df"
+  },
+  "constraints": 12952,
+  "r1csBytes": 1762612
+}
