@@ -38,6 +38,7 @@ ref/
 spark-hackathon.md
 .worktrees/
 worktrees/
+supabase/.temp/
 
 # Logs / coverage
 *.log
