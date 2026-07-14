@@ -1,0 +1,12 @@
+{
+  "name": "@wisp/web",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "node -e \"console.log('web stub: Phase 3')\"",
+    "build": "node -e \"console.log('web stub build ok')\"",
+    "lint": "node -e \"process.exit(0)\"",
+    "typecheck": "node -e \"process.exit(0)\"",
+    "test": "node -e \"process.exit(0)\""
+  }
+}

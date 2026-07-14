@@ -1,0 +1,12 @@
+{
+  "name": "@wisp/api",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "node -e \"console.log('api stub: Phase 2')\"",
+    "build": "node -e \"console.log('api stub build ok')\"",
+    "lint": "node -e \"process.exit(0)\"",
+    "typecheck": "node -e \"process.exit(0)\"",
+    "test": "node -e \"process.exit(0)\""
+  }
+}
