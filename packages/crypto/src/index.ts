@@ -27,3 +27,9 @@ export {
   deriveInboxPubkeyFromSignature,
   parseWalletChallenge,
 } from "./signature.ts";
+export {
+  proofToSolidityCalldata,
+  publicSignalsToHex,
+  type SnarkjsGroth16Proof,
+  type SolidityGroth16Proof,
+} from "./proof.ts";

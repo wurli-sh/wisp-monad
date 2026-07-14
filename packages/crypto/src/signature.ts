@@ -1,6 +1,6 @@
-import { createHash } from "node:crypto";
 import nacl from "tweetnacl";
-import { bytesToHex } from "./encryption.ts";
+import { bytesToHex, hexToBytes } from "./encryption.ts";
+import { sha256Bytes, sha256Hex } from "./hash.ts";
 
 const SECP256K1_N = BigInt(
   "0xfffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141",
@@ -24,18 +24,17 @@ export function canonicalizeSignature(sigHex: string): Uint8Array {
     throw new Error("invalid recovery id");
   }
   const sHex = s.toString(16).padStart(64, "0");
-  const out = Buffer.from(r + sHex + v.toString(16).padStart(2, "0"), "hex");
-  return new Uint8Array(out);
+  return hexToBytes(`0x${r}${sHex}${v.toString(16).padStart(2, "0")}`);
 }
 
 export function signatureHash(sigHex: string): string {
   const canonical = canonicalizeSignature(sigHex);
-  return createHash("sha256").update(canonical).digest("hex");
+  return sha256Hex(canonical);
 }
 
 export function inboxKeySeed(sigHex: string): Uint8Array {
   const canonical = canonicalizeSignature(sigHex);
-  return new Uint8Array(createHash("sha256").update(canonical).digest());
+  return sha256Bytes(canonical);
 }
 
 export function buildWalletChallenge(params: {

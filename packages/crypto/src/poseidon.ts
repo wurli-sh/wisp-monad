@@ -1,4 +1,3 @@
-import { buildPoseidon } from "circomlibjs";
 import { SNARK_SCALAR_FIELD } from "@wisp/shared";
 
 type PoseidonApi = { hash: (inputs: bigint[]) => bigint };
@@ -8,6 +7,7 @@ let poseidonPromise: Promise<PoseidonApi> | null = null;
 async function getPoseidon(): Promise<PoseidonApi> {
   if (!poseidonPromise) {
     poseidonPromise = (async () => {
+      const { buildPoseidon } = await import("circomlibjs");
       const poseidon = await buildPoseidon();
       const F = poseidon.F;
       return {

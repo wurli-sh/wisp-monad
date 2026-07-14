@@ -1,20 +1,14 @@
-import { createHash } from "node:crypto";
 import { SNARK_SCALAR_FIELD } from "@wisp/shared";
 import nacl from "tweetnacl";
 import { noteCommitment } from "./poseidon.ts";
+import { sha256Bytes, sha256Hex, u32Be } from "./hash.ts";
 
 const DOMAIN_RECIPIENT_KEY = "wisp-recipient-key-v1";
 
 /** SHA-256 domain + length-prefixed payload, reduced mod r (impl-plan §4.1). */
 export function hashToField(domain: string, payload: Uint8Array): bigint {
   const domainBytes = new TextEncoder().encode(domain);
-  const len = Buffer.alloc(4);
-  len.writeUInt32BE(payload.length, 0);
-  const digest = createHash("sha256")
-    .update(domainBytes)
-    .update(len)
-    .update(payload)
-    .digest();
+  const digest = sha256Bytes(domainBytes, u32Be(payload.length), payload);
   let value = 0n;
   for (const byte of digest) {
     value = (value << 8n) + BigInt(byte);
@@ -138,11 +132,10 @@ export function envelopeHash(parts: {
   nonce: string;
   ciphertext: string;
 }): string {
-  return createHash("sha256")
-    .update(
-      `${parts.recipientPubkey.toLowerCase()}:${parts.ephemeralPubkey.toLowerCase()}:${parts.nonce.toLowerCase()}:${parts.ciphertext.toLowerCase()}`,
-    )
-    .digest("hex");
+  const material = new TextEncoder().encode(
+    `${parts.recipientPubkey.toLowerCase()}:${parts.ephemeralPubkey.toLowerCase()}:${parts.nonce.toLowerCase()}:${parts.ciphertext.toLowerCase()}`,
+  );
+  return sha256Hex(material);
 }
 
 export function hexToBytes(hex: string): Uint8Array {
@@ -158,5 +151,7 @@ export function hexToBytes(hex: string): Uint8Array {
 }
 
 export function bytesToHex(bytes: Uint8Array): `0x${string}` {
-  return `0x${Buffer.from(bytes).toString("hex")}` as `0x${string}`;
+  let hex = "";
+  for (const b of bytes) hex += b.toString(16).padStart(2, "0");
+  return `0x${hex}` as `0x${string}`;
 }

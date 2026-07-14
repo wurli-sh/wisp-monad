@@ -4,7 +4,11 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./encryption": "./src/encryption.ts",
+    "./poseidon": "./src/poseidon.ts",
+    "./proof": "./src/proof.ts",
+    "./signature": "./src/signature.ts"
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json --noEmit",
@@ -12,6 +16,7 @@
     "lint": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
+    "@noble/hashes": "1.8.0",
     "@wisp/shared": "workspace:*",
     "circomlibjs": "0.1.7",
     "tweetnacl": "1.0.3"
