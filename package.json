@@ -17,10 +17,23 @@
     "build:circuits": "pnpm --filter @wisp/circuits build",
     "deploy:testnet": "bash scripts/deploy/monad-testnet.sh",
     "smoke:phase1": "bash scripts/e2e/phase1-live-smoke.sh",
-    "test:e2e": "node -e \"console.log('e2e stub: Phase 3'); process.exit(0)\"",
+    "smoke:phase2": "bash scripts/e2e/phase2-api-smoke.sh --require-ready",
+    "smoke:phase2:local": "bash scripts/e2e/phase2-api-smoke.sh",
+    "preflight:phase2": "bash scripts/e2e/phase2-testnet-preflight.sh",
+    "dev:api": "pnpm --filter @wisp/api dev",
+    "dev:indexer": "pnpm --filter @wisp/api dev:indexer",
+    "test:api": "pnpm --filter @wisp/api test",
+    "test:e2e": "bash scripts/e2e/phase2-api-smoke.sh --require-ready",
     "check": "pnpm lint && pnpm typecheck && pnpm test && pnpm test:circuits && pnpm test:deployment && pnpm test:contracts && pnpm build"
   },
   "devDependencies": {
     "typescript": "5.8.3"
+  },
+  "pnpm": {
+    "overrides": {
+      "@supabase/auth-js": "2.70.0",
+      "underscore": "1.13.8",
+      "ws": "8.21.0"
+    }
   }
 }
