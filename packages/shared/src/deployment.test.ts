@@ -1,9 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import {
-  deploymentSchema,
-  loadDeploymentManifest,
-} from "../src/deployment.ts";
+import { deploymentSchema } from "./deployment.ts";
+import { loadDeploymentManifest } from "./load-deployment.ts";
 
 describe("loadDeploymentManifest", () => {
   it("loads monad testnet manifest", () => {
@@ -18,10 +16,15 @@ describe("loadDeploymentManifest", () => {
     assert.throws(() =>
       deploymentSchema.parse({
         ...manifest,
-        token: { ...manifest.token, address: "0x0000000000000000000000000000000000000001" },
+        token: {
+          ...manifest.token,
+          address: "0x0000000000000000000000000000000000000001",
+        },
       }),
     );
     const { "100000000": _removed, ...incompletePools } = manifest.pools;
-    assert.throws(() => deploymentSchema.parse({ ...manifest, pools: incompletePools }));
+    assert.throws(() =>
+      deploymentSchema.parse({ ...manifest, pools: incompletePools }),
+    );
   });
 });

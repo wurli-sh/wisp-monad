@@ -110,7 +110,7 @@ export const claimPayloadV1Schema = z
     secret: hex32Schema,
     recipientKeyDigest: hex32Schema,
     commitment: hex32Schema,
-    depositTxHash: hex32Schema,
+    depositTxHash: hex32Schema.optional(),
   })
   .strict();
 
@@ -119,7 +119,10 @@ export const inviteCreateSchema = z
     normalizedHandle: z.string().email().max(320),
     deliveryKind: z.enum(["email"]),
     recipientEmail: z.string().email(),
-    claimPayload: claimPayloadV1Schema,
+    claimPayload: claimPayloadV1Schema.refine(
+      (p) => typeof p.depositTxHash === "string",
+      { message: "depositTxHash required for email invites" },
+    ),
     logIndex: z.number().int().nonnegative(),
     expiresAt: z.string().datetime().optional(),
   })
