@@ -55,3 +55,19 @@ test("invalid tree depths are rejected", () => {
   assert.throws(() => new IncrementalMerkleTree(31), /tree depth/);
   assert.throws(() => new IncrementalMerkleTree(1.5), /tree depth/);
 });
+
+test("pathForLeafIndex returns a path against the latest root", async () => {
+  const leaves = [11n, 22n, 33n];
+  const tree = new IncrementalMerkleTree(20);
+  for (const leaf of leaves) await tree.insert(leaf);
+
+  const path = await tree.pathForLeafIndex(0, leaves);
+  let current = leaves[0]!;
+  for (let level = 0; level < path.pathElements.length; level++) {
+    current = path.pathIndices[level] === 0
+      ? await poseidonHash([current, path.pathElements[level]!])
+      : await poseidonHash([path.pathElements[level]!, current]);
+  }
+  assert.equal(path.root, tree.root);
+  assert.equal(current, tree.root);
+});

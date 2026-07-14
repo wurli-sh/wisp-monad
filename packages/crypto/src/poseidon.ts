@@ -115,6 +115,58 @@ export class IncrementalMerkleTree {
     this.nextIndex += 1;
     return { leafIndex, root: currentHash, pathElements, pathIndices };
   }
+
+  /** Rebuild the current tree and return a path for any existing leaf. */
+  async pathForLeafIndex(
+    leafIndex: number,
+    leavesInOrder: bigint[],
+  ): Promise<{
+    root: bigint;
+    pathElements: bigint[];
+    pathIndices: number[];
+  }> {
+    if (leafIndex < 0 || leafIndex >= leavesInOrder.length) {
+      throw new Error("leaf index out of range");
+    }
+    const capacity = 1 << this.depth;
+    if (leavesInOrder.length > capacity) throw new Error("tree full");
+    for (const leaf of leavesInOrder) {
+      if (leaf < 0n || leaf >= SNARK_SCALAR_FIELD) {
+        throw new Error("leaf out of field");
+      }
+    }
+
+    const zeros = await computeZeroHashes(this.depth);
+    let levelNodes = new Map<number, bigint>(
+      leavesInOrder.map((leaf, index) => [index, leaf]),
+    );
+    let targetIndex = leafIndex;
+    const pathElements: bigint[] = [];
+    const pathIndices: number[] = [];
+
+    for (let level = 0; level < this.depth; level++) {
+      const siblingIndex = targetIndex ^ 1;
+      pathElements.push(levelNodes.get(siblingIndex) ?? zeros[level]!);
+      pathIndices.push(targetIndex & 1);
+
+      const parentIndices = new Set<number>();
+      for (const index of levelNodes.keys()) parentIndices.add(Math.floor(index / 2));
+      const next = new Map<number, bigint>();
+      for (const parent of parentIndices) {
+        const left = levelNodes.get(parent * 2) ?? zeros[level]!;
+        const right = levelNodes.get(parent * 2 + 1) ?? zeros[level]!;
+        next.set(parent, await poseidonHash([left, right]));
+      }
+      levelNodes = next;
+      targetIndex = Math.floor(targetIndex / 2);
+    }
+
+    return {
+      root: levelNodes.get(0) ?? (await emptyRoot(this.depth)),
+      pathElements,
+      pathIndices,
+    };
+  }
 }
 
 export async function noteCommitment(params: {
