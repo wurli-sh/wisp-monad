@@ -1,0 +1,18 @@
+{
+  "name": "@wisp/circuits",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "bash scripts/build-claim.sh",
+    "build:claim": "bash scripts/build-claim.sh",
+    "test": "node --test --test-force-exit test/*.test.mjs",
+    "lint": "node -e \"process.exit(0)\"",
+    "typecheck": "node -e \"process.exit(0)\""
+  },
+  "dependencies": {
+    "circomlib": "2.0.5",
+    "circomlibjs": "0.1.7",
+    "snarkjs": "0.7.5"
+  }
+}
