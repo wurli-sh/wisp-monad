@@ -14,9 +14,9 @@ describe("web claim link unit", () => {
       pool: `0x${"ab".repeat(20)}`,
       token: CIRCLE_MONAD_TESTNET_USDC,
       denomination: "1000000",
-      secret: `0x${"11".repeat(32)}`,
-      recipientKeyDigest: `0x${"22".repeat(32)}`,
-      commitment: `0x${"33".repeat(32)}`,
+      secret: `0x${"01".repeat(32)}`,
+      recipientKeyDigest: `0x${"02".repeat(32)}`,
+      commitment: `0x${"03".repeat(32)}`,
     });
     const decoded = decodeClaimPayload(encoded);
     assert.equal(decoded.denomination, "1000000");

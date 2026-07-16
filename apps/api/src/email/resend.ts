@@ -1,7 +1,11 @@
 import { Resend } from "resend";
 
 export function claimEmailHtml(claimUrl: string): string {
-  if (!/^https:\/\/[^\s#]+\/claim#p=[A-Za-z0-9_-]+$/.test(claimUrl)) {
+  if (
+    !/^https:\/\/[^\s#]+\/c#p=[A-Za-z0-9_-]+$/.test(
+      claimUrl,
+    )
+  ) {
     throw new Error("invalid claim URL");
   }
   return `<p>Someone sent you a private USDC payment on Monad.</p>
