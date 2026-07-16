@@ -22,8 +22,12 @@ import { getAccount } from "@wagmi/core";
 import { injected } from "wagmi/connectors";
 import { monadTestnet } from "viem/chains";
 import { formatUnits } from "viem";
-import { Button } from "@/components/ui/Button";
-import { apiFetch } from "@/lib/api";
+import { toast } from "sonner";
+import { Wallet, X } from "lucide-react";
+import { PageShell } from "@/components/PageShell";
+import { NoteCardSkeleton } from "@/components/ui/Skeleton";
+import { MotionPillButton, WispVisaCard } from "@/components/WispVisaCard";
+import { apiFetchWithIndexerRetry } from "@/lib/api";
 import { parseTrustedClaimPayload } from "@/lib/claim";
 import { poolAbi } from "@/lib/abis";
 import {
@@ -34,14 +38,21 @@ import {
 } from "@/lib/wagmi";
 import { proveInWorker, verifyCircuitArtifacts } from "@/lib/prover/client";
 import { TextShimmer } from "@/components/ui/TextShimmer";
+import { friendlyError } from "@/lib/toast";
 import type { MerklePathResponse } from "./claim-types";
 
-export function ClaimClient() {
+type Props = {
+  /** When true, omit PageShell (parent owns layout). */
+  embedded?: boolean;
+};
+
+export function ClaimClient({ embedded = false }: Props) {
   const [payload, setPayload] = useState<ClaimPayloadV1 | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [progress, setProgress] = useState<string | null>(null);
   const [canCancel, setCanCancel] = useState(false);
   const [txHash, setTxHash] = useState<string | null>(null);
+  const [hasHash, setHasHash] = useState(false);
   const warned = useRef(false);
   const cancelRef = useRef<(() => void) | null>(null);
 
@@ -53,13 +64,22 @@ export function ClaimClient() {
   useEffect(() => {
     const hash = window.location.hash;
     if (new URL(window.location.href).searchParams.has("p")) {
-      setError("Query-string claim links are rejected. Use /claim#p=… only.");
+      const msg = "Use claim links with #p=… only.";
+      setError(msg);
+      toast.error(msg);
       return;
     }
     if (!hash.startsWith("#p=")) {
-      setError("No claim payload in the URL fragment.");
+      if (embedded) {
+        // Empty claim tab — waiting for a link paste / navigation with hash.
+        return;
+      }
+      const msg = "No claim payload in the URL.";
+      setError(msg);
+      toast.error(msg);
       return;
     }
+    setHasHash(true);
     const encoded = hash.slice(3);
     let active = true;
     void (async () => {
@@ -81,25 +101,34 @@ export function ClaimClient() {
         if (
           fieldToHex(commitment).toLowerCase() !== decoded.commitment.toLowerCase()
         ) {
-          setError("Commitment mismatch — payload is invalid");
+          const msg = "Invalid claim payload.";
+          setError(msg);
+          toast.error(msg);
           return;
         }
         setPayload(decoded);
         if (!warned.current) {
           warned.current = true;
-          // Strip fragment after load into memory
-          window.history.replaceState(null, "", "/claim");
+          const qs = new URLSearchParams(window.location.search);
+          qs.set("tab", "claim");
+          window.history.replaceState(
+            null,
+            "",
+            `${window.location.pathname}?${qs.toString()}`,
+          );
         }
       } catch (e) {
         if (active) {
-          setError(e instanceof Error ? e.message : "Invalid claim payload");
+          const msg = friendlyError(e, "Invalid claim link.");
+          setError(msg);
+          toast.error(msg);
         }
       }
     })();
     return () => {
       active = false;
     };
-  }, []);
+  }, [embedded]);
 
   useEffect(
     () => () => {
@@ -139,10 +168,14 @@ export function ClaimClient() {
       }
 
       setProgress("Fetching Merkle path…");
-      const path = await apiFetch<MerklePathResponse>("/v1/merkle/path", {
-        method: "POST",
-        body: { pool: payload.pool, commitment: payload.commitment },
-      });
+      const path = await apiFetchWithIndexerRetry<MerklePathResponse>(
+        "/v1/merkle/path",
+        {
+          method: "POST",
+          body: { pool: payload.pool, commitment: payload.commitment },
+          onRetry: () => setProgress("Waiting for indexer…"),
+        },
+      );
 
       const known = await publicClient.readContract({
         address: payload.pool as `0x${string}`,
@@ -248,52 +281,88 @@ export function ClaimClient() {
       if (receipt.status !== "success") throw new Error("Claim transaction failed");
       setTxHash(hash);
       setProgress("Claim finalized");
+      toast.success("Claim finalized");
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Claim failed");
+      const msg = friendlyError(e, "Claim failed.");
+      setError(msg);
+      toast.error(msg);
       setProgress(null);
       setCanCancel(false);
       cancelRef.current = null;
     }
   }
 
-  return (
-    <div className="mx-auto max-w-lg space-y-6">
-      <h1 className="text-3xl font-bold">Claim</h1>
-      <p className="text-sm text-muted-foreground">
-        Bearer link authorization. The claim transaction sender pays MON gas and is
-        visible on-chain. Refreshing loses the fragment — keep the original link.
-      </p>
+  const loadingPayload = !payload && !error && (!embedded || hasHash);
+  const emptyEmbedded = embedded && !payload && !error && !hasHash;
+
+  const body = (
+    <>
+      {loadingPayload && <NoteCardSkeleton />}
+
+      {emptyEmbedded && (
+        <p className="text-center text-sm text-muted-foreground">
+          Drop a claim link here — or open one from your inbox.
+        </p>
+      )}
+
       {payload && (
-        <div className="rounded-2xl border border-border bg-card p-5">
-          <p className="text-2xl font-bold">
-            {formatUnits(BigInt(payload.denomination), 6)} USDC
-          </p>
-          <p className="mt-2 text-xs text-muted-foreground break-all">
-            Pool {payload.pool}
-          </p>
-        </div>
+        <WispVisaCard
+          hideHeader
+          amount={formatUnits(BigInt(payload.denomination), 6)}
+          note={`Note ${payload.commitment.slice(0, 12)}… · Circuit ${CIRCUIT_ID.slice(0, 10)}…`}
+          status={txHash ? "Claimed" : "Claimable"}
+          compact
+          footer={
+            <div className="flex flex-wrap gap-2">
+              <MotionPillButton
+                disabled={!!txHash || !!progress}
+                onClick={() => void claim()}
+              >
+                {progress ? (
+                  <TextShimmer>{progress}</TextShimmer>
+                ) : (
+                  <>
+                    <Wallet className="h-4 w-4" aria-hidden="true" />
+                    Connect & claim
+                  </>
+                )}
+              </MotionPillButton>
+              {canCancel && (
+                <MotionPillButton
+                  onClick={() => {
+                    cancelRef.current?.();
+                    toast.message("Proof cancelled");
+                  }}
+                >
+                  <X className="h-4 w-4" aria-hidden="true" />
+                  Cancel
+                </MotionPillButton>
+              )}
+            </div>
+          }
+        />
       )}
-      <div className="flex gap-2">
-        <Button disabled={!payload || !!txHash || !!progress} onClick={() => void claim()}>
-          {progress ? <TextShimmer>{progress}</TextShimmer> : "Connect & claim"}
-        </Button>
-        {canCancel && (
-          <Button variant="outline" onClick={() => cancelRef.current?.()}>
-            Cancel
-          </Button>
-        )}
-      </div>
+
+      {error && (
+        <p className="mt-4 text-center text-sm text-destructive">{error}</p>
+      )}
+
       {txHash && (
-        <a
-          className="text-sm text-brand underline"
-          href={transactionExplorerUrl(txHash)}
-          target="_blank"
-          rel="noreferrer"
-        >
-          View claim on explorer
-        </a>
+        <p className="mt-4 text-center">
+          <a
+            className="text-sm font-semibold text-brand underline"
+            href={transactionExplorerUrl(txHash)}
+            target="_blank"
+            rel="noreferrer"
+          >
+            View claim on explorer
+          </a>
+        </p>
       )}
-      {error && <p className="text-sm text-destructive">{error}</p>}
-    </div>
+    </>
   );
+
+  if (embedded) return body;
+
+  return <PageShell maxWidth="md">{body}</PageShell>;
 }

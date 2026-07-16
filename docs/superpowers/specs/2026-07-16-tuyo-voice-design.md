@@ -24,7 +24,7 @@ Technical honesty stays on `/privacy` body copy. Errors and toasts stay short an
 
 | Spot | Copy |
 |------|------|
-| Headline | Imagine paying @maria. Quietly. |
+| Headline | Pay anyone by handle. Quietly. |
 | Subhead | Type a handle or email. Hit pay. No wallet addresses exchanged. |
 | CTA prompt | Getting paid? Open your private inbox. |
 
@@ -41,7 +41,7 @@ Section heading: **How it works.**
 
 | Step | Title | Body |
 |------|-------|------|
-| 01 | Type a handle. | `@maria` or an email. That’s it — no wallet addresses to copy, paste, or mess up. |
+| 01 | Type a handle. | `@patlu` or an email. That’s it — no wallet addresses to copy, paste, or mess up. |
 | 02 | Pick an amount. Pay. | Choose a size, hit pay once. They get a private note waiting for them. |
 | 03 | They claim when ready. | Your pay and their claim stay separate. No trail that ties you together. |
 

@@ -2,22 +2,25 @@
 
 import { useEffect, useRef, useState } from "react";
 
-const HANDLE = "@maria";
+import { WispVisaCard } from "@/components/WispVisaCard";
+import { UsdcIcon } from "@/components/UsdcIcon";
+
+const HANDLE = "@patlu";
 const DENOMS = [1, 10, 50, 100];
 const PICKED = 50;
 
 const STEPS = [
   {
     title: "Type a handle.",
-    body: "@maria or an email. Wisp resolves it to their keys. No wallet addresses exchanged.",
+    body: "@patlu or an email. That’s it — no wallet addresses to copy, paste, or mess up.",
   },
   {
     title: "Pick an amount. Pay.",
-    body: "Fixed sizes only: 1, 10, 50 or 100 USDC on Monad, so no amount stands out. Sign once.",
+    body: "Choose a size, hit pay once. They get a private note waiting for them.",
   },
   {
-    title: "A note appears on-chain.",
-    body: "Only a commitment hash. The recipient claims it later with a zero-knowledge proof. No link back to you.",
+    title: "They claim when ready.",
+    body: "Your pay and their claim stay separate. No trail that ties you together.",
   },
 ];
 
@@ -126,11 +129,13 @@ export function HowItWorks() {
                 <button
                   type="button"
                   onClick={() => play(i as 0 | 1 | 2)}
-                  className={`text-left transition-opacity duration-300 hover:opacity-100 ${
+                  className={`cursor-pointer text-left transition-opacity duration-300 hover:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-4 ${
                     i === active ? "opacity-100" : "opacity-40"
                   }`}
                 >
-                  <p className="font-mono text-sm text-muted-foreground">0{i + 1}</p>
+                  <p className="font-mono text-sm text-muted-foreground">
+                    0{i + 1}
+                  </p>
                   <p className="mt-1 text-xl font-semibold">{step.title}</p>
                   <p className="mt-2 text-muted-foreground">{step.body}</p>
                 </button>
@@ -149,7 +154,7 @@ export function HowItWorks() {
             }`}
           >
             <div className="flex w-full max-w-md items-center gap-2 sm:w-auto sm:max-w-none">
-              <span className="flex min-w-0 flex-1 items-center rounded-full border border-border bg-card px-5 py-3 text-lg sm:min-w-[340px] sm:flex-none sm:px-6 sm:py-4 sm:text-xl">
+              <span className="radius-control flex min-w-0 flex-1 items-center border border-border bg-card px-5 py-3 text-lg sm:min-w-[340px] sm:flex-none sm:px-6 sm:py-4 sm:text-xl">
                 {typed ? (
                   <span className="truncate">{typed}</span>
                 ) : (
@@ -164,7 +169,7 @@ export function HowItWorks() {
                 />
               </span>
               <span
-                className={`shrink-0 rounded-full bg-primary px-6 py-3 text-lg font-semibold text-primary-foreground transition-transform duration-200 sm:px-7 sm:py-4 sm:text-xl ${
+                className={`radius-control shrink-0 bg-primary px-6 py-3 text-lg font-semibold text-primary-foreground transition-transform duration-200 sm:px-7 sm:py-4 sm:text-xl ${
                   pressed ? "scale-90" : "scale-100"
                 }`}
               >
@@ -175,42 +180,35 @@ export function HowItWorks() {
               {DENOMS.map((d) => (
                 <span
                   key={d}
-                  className={`whitespace-nowrap rounded-full border px-4 py-2 text-sm font-medium transition-all duration-300 sm:px-5 sm:py-2.5 sm:text-base ${
+                  className={`radius-control whitespace-nowrap border px-4 py-2 text-sm font-medium transition-all duration-300 sm:px-5 sm:py-2.5 sm:text-base ${
                     denom && d === PICKED
                       ? "scale-105 border-primary bg-primary text-primary-foreground"
                       : "border-border bg-card text-muted-foreground"
                   }`}
                 >
-                  {d} USDC
+                  <span className="inline-flex items-center gap-1.5">
+                    {d}
+                    <UsdcIcon className="size-4" />
+                    USDC
+                  </span>
                 </span>
               ))}
             </div>
           </div>
 
           <div
-            className={`w-[340px] rounded-2xl border border-border bg-card p-7 shadow-sm transition-all duration-700 ease-out sm:w-[480px] sm:p-9 ${
+            className={`w-[380px] max-w-full transition-all duration-700 ease-out sm:w-[460px] ${
               cardIn ? "translate-y-0 opacity-100" : "translate-y-12 opacity-0"
             }`}
           >
-            <div className="flex items-center gap-2">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src="/wisp-logo.svg"
-                alt=""
-                className="h-5 w-auto brightness-0 sm:h-6"
-              />
-              <span className="text-base font-bold tracking-tight sm:text-lg">Wisp</span>
-            </div>
-            <p className="mt-8 text-5xl font-bold tracking-tight sm:text-6xl">
-              50 USDC
-            </p>
-            <p className="mt-2 text-xl text-muted-foreground">to @maria</p>
-            <div className="mt-8 flex items-center justify-between gap-4 border-t border-border pt-5">
-              <p className="font-mono text-sm text-muted-foreground">sent silently</p>
-              <p className="font-mono text-sm text-muted-foreground">
-                0x9f3a41c7…c41d
-              </p>
-            </div>
+            <WispVisaCard
+              label="Private note"
+              amount="50"
+              recipient="@patlu"
+              status="sent quietly"
+              note="0x9f3a41c7…c41d"
+              compact
+            />
           </div>
         </div>
       </div>

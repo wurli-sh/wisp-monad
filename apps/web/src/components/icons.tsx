@@ -16,6 +16,7 @@ function BrandIcon({ children, ...props }: SVGProps<SVGSVGElement>) {
   );
 }
 
+/** OAuth provider marks are brand artwork, so Lucide does not supply them. */
 export function XBrandIcon(props: SVGProps<SVGSVGElement>) {
   return (
     <BrandIcon {...props}>

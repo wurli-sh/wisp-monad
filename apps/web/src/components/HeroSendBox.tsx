@@ -2,9 +2,10 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { Send } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 
-const SAMPLES = ["@maria", "kyle@gmail.com", "@stellar_dev"];
+const SAMPLES = ["@patlu", "kyle@gmail.com", "@lavde"];
 
 export function HeroSendBox() {
   const [to, setTo] = useState("");
@@ -59,9 +60,10 @@ export function HeroSendBox() {
         placeholder={placeholder}
         aria-label="Recipient"
         autoComplete="off"
-        className="w-full flex-1 rounded-full border-2 border-border bg-card px-5 py-3.5 text-lg outline-none placeholder:text-muted-foreground/60 focus:border-brand focus:ring-2 focus:ring-brand/30"
+        className="radius-control w-full flex-1 border-2 border-border bg-card px-5 py-3.5 text-lg outline-none placeholder:text-muted-foreground/70 focus:border-brand focus:ring-2 focus:ring-ring/30"
       />
       <Button type="submit" size="lg" className="shrink-0 sm:px-7">
+        <Send className="h-4 w-4" aria-hidden="true" />
         Pay
       </Button>
     </form>

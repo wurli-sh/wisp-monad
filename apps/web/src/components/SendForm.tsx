@@ -29,12 +29,15 @@ import { injected } from "wagmi/connectors";
 import { monadTestnet } from "viem/chains";
 import { formatUnits, parseEventLogs } from "viem";
 import { motion, useReducedMotion } from "framer-motion";
-import { Button } from "@/components/ui/Button";
+import { toast } from "sonner";
+import { Check, Copy, ExternalLink, Send } from "lucide-react";
+import { MotionPillButton, WispVisaCard } from "@/components/WispVisaCard";
+import { UsdcIcon } from "@/components/UsdcIcon";
+import { friendlyError } from "@/lib/toast";
 import { apiFetch } from "@/lib/api";
 import { createClient } from "@/lib/supabase/client";
 import { poolAbi, erc20Abi } from "@/lib/abis";
 import {
-  CIRCUIT_ID,
   manifest,
   USDC_ADDRESS,
   USDC_DECIMALS,
@@ -42,20 +45,15 @@ import {
   wagmiConfig,
 } from "@/lib/wagmi";
 import { TextShimmer } from "@/components/ui/TextShimmer";
-import { buttonHover, buttonTap } from "@/lib/motion";
+import { buttonTap } from "@/lib/motion";
 import { normalizeMeResponse, type ApiMeResponse } from "@/lib/api-contracts";
-import {
-  encodeSentActivity,
-  type SentDeliveryKind,
-} from "@/lib/activity";
+import { encodeSentActivity, type SentDeliveryKind } from "@/lib/activity";
 
 const DENOMS = [1_000_000n, 10_000_000n, 50_000_000n, 100_000_000n] as const;
 
 type Stage =
   | "idle"
   | "resolving"
-  | "found"
-  | "unregistered"
   | "wallet_required"
   | "wrong_chain"
   | "ready"
@@ -79,13 +77,16 @@ export function SendForm() {
   const [to, setTo] = useState(params.get("to") ?? "");
   const [denom, setDenom] = useState<bigint>(1_000_000n);
   const [stage, setStage] = useState<Stage>("idle");
-  const [resolve, setResolve] = useState<ResolveResult | null>(null);
-  const [resolvedTo, setResolvedTo] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [recoveryUrl, setRecoveryUrl] = useState<string | null>(null);
   const [txHash, setTxHash] = useState<`0x${string}` | null>(null);
+  const [lockedRecipient, setLockedRecipient] = useState<string | null>(null);
+  const [sentAmount, setSentAmount] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
   const [token, setToken] = useState<string | null>(null);
-  const [senderInboxPubkey, setSenderInboxPubkey] = useState<string | null>(null);
+  const [senderInboxPubkey, setSenderInboxPubkey] = useState<string | null>(
+    null,
+  );
   const [emailConsent, setEmailConsent] = useState(false);
   const sendingRef = useRef(false);
   const reduce = useReducedMotion();
@@ -125,45 +126,6 @@ export function SendForm() {
     }
   }, []);
 
-  useEffect(() => {
-    const trimmed = to.trim();
-    setResolve(null);
-    setResolvedTo(null);
-    if (!trimmed) {
-      setStage("idle");
-      return;
-    }
-
-    const controller = new AbortController();
-    let active = true;
-    setStage("resolving");
-    setError(null);
-    const timer = setTimeout(() => {
-      const q = encodeURIComponent(trimmed);
-      void apiFetch<ResolveResult>(`/v1/resolve?q=${q}`, {
-        signal: controller.signal,
-      })
-        .then((result) => {
-          if (!active) return;
-          setResolve(result);
-          setResolvedTo(trimmed);
-          setStage(result.found ? "found" : "unregistered");
-        })
-        .catch((e: unknown) => {
-          if (!active) return;
-          if (e instanceof DOMException && e.name === "AbortError") return;
-          setStage("error");
-          setError(e instanceof Error ? e.message : "Resolve failed");
-        });
-    }, 400);
-
-    return () => {
-      active = false;
-      clearTimeout(timer);
-      controller.abort();
-    };
-  }, [to]);
-
   async function ensureWallet(): Promise<`0x${string}`> {
     if (!getAccount(wagmiConfig).address) {
       await connectAsync({ connector: injected() });
@@ -195,16 +157,16 @@ export function SendForm() {
       hexToBytes(senderInboxPubkey),
       ephemeralSecret,
       encodeSentActivity({
-          v: 1,
-          kind: "sent",
-          recipient: params.recipient,
-          displayRecipient: params.displayRecipient,
-          denomination: params.denomination.toString(),
-          pool: params.pool,
-          commitment: params.commitment,
-          depositTxHash: params.depositTxHash,
-          delivery: params.delivery,
-          createdAt: new Date().toISOString(),
+        v: 1,
+        kind: "sent",
+        recipient: params.recipient,
+        displayRecipient: params.displayRecipient,
+        denomination: params.denomination.toString(),
+        pool: params.pool,
+        commitment: params.commitment,
+        depositTxHash: params.depositTxHash,
+        delivery: params.delivery,
+        createdAt: new Date().toISOString(),
       }),
     );
     await apiFetch("/v1/activity", {
@@ -225,20 +187,33 @@ export function SendForm() {
     setError(null);
     setRecoveryUrl(null);
     setTxHash(null);
+    setSentAmount(null);
+    setCopied(false);
+    let createdRecovery = false;
     try {
       const recipient = to.trim();
-      if (!recipient || resolvedTo !== recipient || !resolve) {
-        throw new Error("Wait for recipient resolution before sending");
-      }
+      if (!recipient) throw new Error("Enter a recipient");
+      setStage("resolving");
+      const resolve = await apiFetch<ResolveResult>(
+        `/v1/resolve?q=${encodeURIComponent(recipient)}`,
+      );
+      const displayRecipient =
+        resolve.found && resolve.displayHandle
+          ? resolve.displayHandle
+          : recipient;
+      setLockedRecipient(displayRecipient);
       const looksEmail = recipient.includes("@") && !recipient.startsWith("@");
       if (resolve.found) {
-        const resolvedPool = resolve.pools[denom.toString() as keyof typeof resolve.pools];
+        const resolvedPool =
+          resolve.pools[denom.toString() as keyof typeof resolve.pools];
         if (
           resolve.chainId !== MONAD_TESTNET_CHAIN_ID ||
           resolve.token.toLowerCase() !== USDC_ADDRESS.toLowerCase() ||
           resolvedPool?.toLowerCase() !== pool.toLowerCase()
         ) {
-          throw new Error("Resolved recipient deployment does not match this app");
+          throw new Error(
+            "Resolved recipient deployment does not match this app",
+          );
         }
         if (!token) {
           throw new Error("Sign in before sending to a registered inbox");
@@ -277,16 +252,14 @@ export function SendForm() {
       const secret = randomSecret();
       let recipientKeyDigest: bigint;
       let commitment: bigint;
-      let envelope:
-        | {
-            recipientPubkey: string;
-            ephemeralPubkey: string;
-            nonce: string;
-            ciphertext: string;
-          }
-        | null = null;
+      let envelope: {
+        recipientPubkey: string;
+        ephemeralPubkey: string;
+        nonce: string;
+        ciphertext: string;
+      } | null = null;
 
-      if (resolve?.found) {
+      if (resolve.found) {
         const pk = hexToBytes(resolve.inboxPubkey);
         const built = await createRegisteredNoteEnvelope({
           recipientPubkey: pk,
@@ -347,7 +320,8 @@ export function SendForm() {
         const approveReceipt = await publicClient.waitForTransactionReceipt({
           hash: approveHash,
         });
-        if (approveReceipt.status !== "success") throw new Error("Approval failed");
+        if (approveReceipt.status !== "success")
+          throw new Error("Approval failed");
       }
 
       setStage("depositing");
@@ -364,6 +338,7 @@ export function SendForm() {
       });
       if (receipt.status !== "success") throw new Error("Deposit failed");
       setTxHash(depositHash);
+      setSentAmount(formatUnits(denom, 6));
 
       const payload: ClaimPayloadV1 = {
         v: 1,
@@ -379,8 +354,11 @@ export function SendForm() {
       const claimUrl = buildClaimUrl(window.location.origin, payload);
 
       setStage("delivering");
-      let delivery: SentDeliveryKind =
-        resolve.found ? "registered" : looksEmail ? "email" : "claim_link";
+      let delivery: SentDeliveryKind = resolve.found
+        ? "registered"
+        : looksEmail
+          ? "email"
+          : "claim_link";
       let deliveryFailed = false;
       try {
         if (resolve.found && envelope && token) {
@@ -416,6 +394,7 @@ export function SendForm() {
               },
             });
           } else {
+            createdRecovery = true;
             setRecoveryUrl(claimUrl);
             setStage("complete");
           }
@@ -424,13 +403,15 @@ export function SendForm() {
       } catch (deliveryErr) {
         delivery = "recovery_required";
         deliveryFailed = true;
+        createdRecovery = true;
         setRecoveryUrl(claimUrl);
         setStage("delivery_recovery");
-        setError(
-          deliveryErr instanceof Error
-            ? deliveryErr.message
-            : "Delivery failed — copy your recovery claim link",
+        const deliveryMsg = friendlyError(
+          deliveryErr,
+          "Delivery failed — copy your recovery link.",
         );
+        setError(deliveryMsg);
+        toast.error(deliveryMsg);
       }
 
       try {
@@ -448,139 +429,220 @@ export function SendForm() {
         });
       } catch {
         if (!deliveryFailed) {
-          setError("Payment completed, but encrypted sent history could not be saved.");
+          toast.error("Sent, but history wasn’t saved.");
         }
       }
     } catch (e) {
       setStage("error");
-      setError(e instanceof Error ? e.message : "Send failed");
+      const msg = friendlyError(e, "Send failed.");
+      setError(msg);
+      toast.error(msg);
+      if (!createdRecovery) {
+        setLockedRecipient(null);
+        setSentAmount(null);
+      }
     } finally {
       sendingRef.current = false;
     }
   }
 
+  const cardRecipient = lockedRecipient ?? "…";
+  const cardAmount = sentAmount ?? formatUnits(denom, 6);
+
+  async function copyClaimLink(url: string) {
+    await navigator.clipboard.writeText(url);
+    setCopied(true);
+    toast.success("Claim link copied");
+    window.setTimeout(() => setCopied(false), 1800);
+  }
+
   return (
-    <div className="mx-auto max-w-xl space-y-6">
-      <h1 className="text-3xl font-bold">Send USDC privately</h1>
-      <p className="text-sm text-muted-foreground">
-        Circle USDC on Monad testnet. Exact approve only. Circuit {CIRCUIT_ID.slice(0, 10)}…
-      </p>
-      <input
-        value={to}
-        onChange={(e) => setTo(e.target.value)}
-        placeholder="@handle or email"
-        className="w-full rounded-full border-2 border-border bg-card px-5 py-3"
-      />
-      <div className="flex flex-wrap gap-2">
-        {DENOMS.map((d) => (
-          <motion.button
-            key={d.toString()}
-            type="button"
-            onClick={() => setDenom(d)}
-            whileHover={reduce ? undefined : buttonHover}
-            whileTap={reduce ? undefined : buttonTap}
-            animate={denom === d && !reduce ? { scale: 1.04 } : { scale: 1 }}
-            className={`rounded-full px-4 py-2 text-sm font-semibold ${
-              denom === d ? "bg-brand text-white shadow-blue-pill" : "border border-border bg-card"
-            }`}
+    <div>
+      <div className="radius-surface overflow-hidden border border-border/80 bg-card p-2 shadow-card">
+        <div className="radius-surface-inner border border-brand/15 bg-brand-mist px-6 py-6 text-center sm:px-8 sm:py-7">
+          <p className="text-xs font-medium text-muted-foreground">Amount</p>
+          <div className="mt-3 flex flex-nowrap justify-center gap-1.5">
+            {DENOMS.map((d) => (
+              <motion.button
+                data-motion-button
+                key={d.toString()}
+                type="button"
+                onClick={() => setDenom(d)}
+                whileTap={reduce ? undefined : buttonTap}
+                className={`radius-control shrink-0 cursor-pointer border px-3 py-2 text-xs font-semibold outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 sm:px-4 sm:py-2.5 sm:text-sm ${
+                  denom === d
+                    ? "border-selection-hover bg-selection text-selection-foreground shadow-soft"
+                    : "border-border/60 bg-card/85 text-foreground/60 backdrop-blur-sm hover:bg-muted hover:text-foreground"
+                }`}
+              >
+                <span className="inline-flex items-center gap-1.5">
+                  {formatUnits(d, 6)}
+                  <UsdcIcon className="size-4" />
+                  USDC
+                </span>
+              </motion.button>
+            ))}
+          </div>
+        </div>
+
+        <div className="space-y-4 px-3 pb-3 pt-5 sm:px-4 sm:pb-4">
+          <div className="space-y-1">
+            <label
+              htmlFor="send-recipient"
+              className="block text-sm font-semibold text-foreground"
+            >
+              Recipient
+            </label>
+            <input
+              id="send-recipient"
+              type="text"
+              value={to}
+              onChange={(e) => {
+                setTo(e.target.value);
+                setError(null);
+                if (stage === "error") setStage("idle");
+              }}
+              placeholder="@handle or email"
+              autoComplete="off"
+              spellCheck={false}
+              className="radius-control w-full border border-border/70 bg-muted px-5 py-3.5 text-sm text-foreground outline-none placeholder:text-muted-foreground/70 transition-[border-color,box-shadow] duration-100 ease-out focus:border-brand focus:ring-2 focus:ring-ring/30"
+            />
+            <p className="px-1 text-xs leading-5 text-muted-foreground">
+              Registered handle? Goes to their inbox. Otherwise you get a
+              private claim link.
+            </p>
+          </div>
+
+          {to.trim() && (
+            <div className="radius-surface-inner space-y-2 border border-warning-border bg-warning-surface px-4 py-3 text-sm text-muted-foreground">
+              <p>If they’re new to Wisp, keep the claim link safe.</p>
+              {to.includes("@") && !to.trim().startsWith("@") && (
+                <label className="flex min-h-10 cursor-pointer items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={emailConsent}
+                    onChange={(e) => setEmailConsent(e.target.checked)}
+                  />
+                  <span>Email it (the provider can see the link).</span>
+                </label>
+              )}
+            </div>
+          )}
+
+          {error && stage === "error" && (
+            <p role="alert" className="text-sm text-destructive">
+              {error}
+            </p>
+          )}
+
+          <MotionPillButton
+            disabled={
+              !pool ||
+              !to.trim() ||
+              stage === "resolving" ||
+              stage === "approving" ||
+              stage === "depositing" ||
+              stage === "delivering"
+            }
+            onClick={() => void send()}
+            className="w-full border-brand-dark/30 bg-brand text-base font-semibold text-brand-foreground shadow-action hover:bg-brand-dark sm:min-h-12 sm:text-lg"
           >
-            {formatUnits(d, 6)} USDC
-          </motion.button>
-        ))}
+            {stage === "resolving" ||
+            stage === "approving" ||
+            stage === "depositing" ||
+            stage === "delivering" ? (
+              <TextShimmer>Working…</TextShimmer>
+            ) : (
+              <>
+                <Send className="h-4 w-4" aria-hidden="true" />
+                Send
+              </>
+            )}
+          </MotionPillButton>
+        </div>
       </div>
 
-      {stage === "resolving" && <TextShimmer>Resolving recipient…</TextShimmer>}
-      {stage === "found" && resolve?.found && (
-        <p className="text-sm text-success">
-          Registered: {resolve.displayHandle}. Encrypted delivery to their inbox key.
-        </p>
+      {stage === "complete" && !recoveryUrl && (
+        <div className="mt-8">
+          <WispVisaCard
+            hideHeader
+            amount={cardAmount}
+            recipient={cardRecipient}
+            status="Sent"
+            compact
+            note={txHash ? `${txHash.slice(0, 10)}…` : "Private note posted"}
+            footer={
+              txHash ? (
+                <MotionPillButton
+                  onClick={() =>
+                    window.open(
+                      transactionExplorerUrl(txHash),
+                      "_blank",
+                      "noreferrer",
+                    )
+                  }
+                >
+                  <ExternalLink className="h-4 w-4" aria-hidden="true" />
+                  View on explorer
+                </MotionPillButton>
+              ) : undefined
+            }
+          />
+        </div>
       )}
-      {stage === "unregistered" && (
-        <div className="space-y-2 rounded-2xl border border-warning/40 bg-card p-4 text-sm">
-          <p className="font-semibold text-warning">Recipient is not registered</p>
-          <p className="text-muted-foreground">
-            You will get a bearer claim link. Anyone with the link can claim — it is not
-            identity-locked.
-          </p>
-          {to.includes("@") && !to.trim().startsWith("@") && (
-            <label className="flex items-start gap-2 text-muted-foreground">
-              <input
-                type="checkbox"
-                checked={emailConsent}
-                onChange={(e) => setEmailConsent(e.target.checked)}
+
+      {recoveryUrl && (
+        <div className="mt-8 space-y-4">
+          <WispVisaCard
+            hideHeader
+            amount={cardAmount}
+            recipient={cardRecipient}
+            status={stage === "delivery_recovery" ? "Recover" : "Claim Link"}
+            compact
+            note="Anyone with the link can claim — treat it like cash"
+            footer={
+              <div className="flex flex-wrap gap-2">
+                <MotionPillButton
+                  onClick={() => void copyClaimLink(recoveryUrl)}
+                >
+                  {copied ? (
+                    <Check className="h-4 w-4" aria-hidden="true" />
+                  ) : (
+                    <Copy className="h-4 w-4" aria-hidden="true" />
+                  )}
+                  {copied ? "Copied!" : "Copy claim link"}
+                </MotionPillButton>
+                {txHash && (
+                  <MotionPillButton
+                    onClick={() =>
+                      window.open(
+                        transactionExplorerUrl(txHash),
+                        "_blank",
+                        "noreferrer",
+                      )
+                    }
+                  >
+                    <ExternalLink className="h-4 w-4" aria-hidden="true" />
+                    Explorer
+                  </MotionPillButton>
+                )}
+              </div>
+            }
+          />
+          {stage === "complete" && cardRecipient.startsWith("@") && (
+            <div className="radius-surface border border-border/80 bg-card p-5 text-sm shadow-card">
+              <p className="font-semibold text-foreground">
+                Copy message for X
+              </p>
+              <textarea
+                readOnly
+                className="radius-surface-inner mt-2 h-28 w-full border border-border/60 bg-muted p-3 font-sans text-xs"
+                value={`I sent you ${cardAmount} USDC privately on Wisp. Claim here: ${recoveryUrl}`}
               />
-              <span>
-                Email the claim link via Resend. The email provider can see the link.
-              </span>
-            </label>
+            </div>
           )}
         </div>
       )}
-
-      <Button
-        disabled={
-          !pool ||
-          !to.trim() ||
-          resolvedTo !== to.trim() ||
-          !resolve ||
-          stage === "resolving" ||
-          stage === "approving" ||
-          stage === "depositing" ||
-          stage === "delivering"
-        }
-        onClick={() => void send()}
-      >
-        {stage === "approving" || stage === "depositing" || stage === "delivering" ? (
-          <TextShimmer>Working…</TextShimmer>
-        ) : (
-          "Send"
-        )}
-      </Button>
-
-      {txHash && (
-        <p className="text-sm">
-          Deposit:{" "}
-          <a
-            className="text-brand underline"
-            href={transactionExplorerUrl(txHash)}
-            target="_blank"
-            rel="noreferrer"
-          >
-            view on explorer
-          </a>
-        </p>
-      )}
-      {(stage === "delivery_recovery" || recoveryUrl) && recoveryUrl && (
-        <div className="rounded-2xl border border-destructive/40 bg-card p-4 text-sm">
-          <p className="font-semibold">Copy your recovery claim link</p>
-          <textarea
-            readOnly
-            className="mt-2 h-24 w-full rounded-xl border border-border bg-background p-2 text-xs"
-            value={recoveryUrl}
-          />
-          <Button
-            className="mt-2"
-            variant="secondary"
-            onClick={() => void navigator.clipboard.writeText(recoveryUrl)}
-          >
-            Copy link
-          </Button>
-        </div>
-      )}
-      {stage === "complete" && !recoveryUrl && (
-        <p className="text-sm text-success">Sent. Delivery complete.</p>
-      )}
-      {stage === "complete" && recoveryUrl && to.trim().startsWith("@") && (
-        <div className="rounded-2xl border border-border bg-card p-4 text-sm">
-          <p className="font-semibold">Copy message for X</p>
-          <textarea
-            readOnly
-            className="mt-2 h-28 w-full rounded-xl border border-border p-2 text-xs"
-            value={`I sent you ${formatUnits(denom, 6)} USDC privately on Wisp (Monad). Claim here: ${recoveryUrl}`}
-          />
-        </div>
-      )}
-      {error && <p className="text-sm text-destructive">{error}</p>}
     </div>
   );
 }

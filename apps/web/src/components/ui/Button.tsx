@@ -2,7 +2,7 @@
 
 import { motion, useReducedMotion } from "framer-motion";
 import { cn } from "@/lib/cn";
-import { buttonHover, buttonTap } from "@/lib/motion";
+import { buttonTap } from "@/lib/motion";
 
 type Variant = "brand" | "primary" | "secondary" | "outline" | "danger";
 type Size = "sm" | "md" | "lg";
@@ -10,17 +10,19 @@ type Size = "sm" | "md" | "lg";
 type Props = {
   variant?: Variant;
   size?: Size;
+  shape?: "pill" | "rounded";
   className?: string;
   children: React.ReactNode;
   disabled?: boolean;
+  "aria-disabled"?: boolean;
   type?: "button" | "submit" | "reset";
   onClick?: () => void;
 };
 
 const variants: Record<Variant, string> = {
-  brand: "pill-gradient bg-brand text-brand-foreground shadow-blue-pill hover:bg-brand-dark",
-  primary: "bg-primary text-brand-foreground hover:bg-primary-dark",
-  secondary: "pill-gradient bg-brand-soft text-brand shadow-blue-pill hover:bg-brand/10",
+  brand: "bg-brand text-brand-foreground shadow-action hover:bg-brand-dark",
+  primary: "bg-primary text-primary-foreground hover:bg-primary-dark",
+  secondary: "bg-selection text-selection-foreground hover:bg-selection-hover",
   outline: "border-2 border-border bg-card text-foreground hover:bg-muted",
   danger: "border-2 border-destructive/30 bg-destructive/10 text-destructive",
 };
@@ -34,22 +36,26 @@ const sizes: Record<Size, string> = {
 export function Button({
   variant = "brand",
   size = "md",
+  shape = "pill",
   className,
   children,
   disabled,
+  "aria-disabled": ariaDisabled,
   type = "button",
   onClick,
 }: Props) {
   const reduce = useReducedMotion();
   return (
     <motion.button
+      data-motion-button
       type={type}
       disabled={disabled}
+      aria-disabled={ariaDisabled || undefined}
       onClick={onClick}
-      whileHover={disabled || reduce ? undefined : buttonHover}
-      whileTap={disabled || reduce ? undefined : buttonTap}
+      whileTap={disabled || ariaDisabled || reduce ? undefined : buttonTap}
       className={cn(
-        "inline-flex min-h-10 cursor-pointer items-center justify-center gap-2 rounded-full font-semibold outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50",
+        "inline-flex min-h-10 cursor-pointer items-center justify-center gap-2 font-semibold transition-colors duration-100 ease-out outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card aria-disabled:cursor-not-allowed aria-disabled:opacity-50 disabled:cursor-not-allowed disabled:opacity-50",
+        shape === "pill" ? "radius-control" : "rounded-lg",
         variants[variant],
         sizes[size],
         className,

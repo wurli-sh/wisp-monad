@@ -1,11 +1,9 @@
 import type { Variants } from "framer-motion";
 
-export const buttonHover = {
-  scale: 1.05,
-  transition: { type: "spring" as const, stiffness: 300, damping: 20 },
+export const buttonTap = {
+  scale: 0.99,
+  transition: { duration: 0.08, ease: "easeOut" as const },
 };
-
-export const buttonTap = { scale: 0.97 };
 
 export const fadeInUp: Variants = {
   hidden: { opacity: 0, y: 16 },

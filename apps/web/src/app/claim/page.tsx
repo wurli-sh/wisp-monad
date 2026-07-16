@@ -1,6 +1,17 @@
-import { ClaimClient } from "@/components/ClaimClient";
+"use client";
 
-/** Secret-free SSR shell — payload is read only in the client from #p=. */
+import { useEffect } from "react";
+
+/** Legacy `/claim#p=` links — hand off to Send → Claim, preserving the fragment. */
 export default function ClaimPage() {
-  return <ClaimClient />;
+  useEffect(() => {
+    const hash = window.location.hash;
+    window.location.replace(`/send?tab=claim${hash}`);
+  }, []);
+
+  return (
+    <p className="text-center text-sm text-muted-foreground" role="status">
+      Opening claim…
+    </p>
+  );
 }

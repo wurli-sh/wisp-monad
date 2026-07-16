@@ -44,3 +44,8 @@ export function transactionExplorerUrl(hash: string): string {
   if (!/^0x[0-9a-f]{64}$/i.test(hash)) throw new Error("invalid transaction hash");
   return `${EXPLORER_ORIGIN}/tx/${hash}`;
 }
+
+export function addressExplorerUrl(address: string): string {
+  if (!/^0x[0-9a-f]{40}$/i.test(address)) throw new Error("invalid address");
+  return `${EXPLORER_ORIGIN}/address/${address}`;
+}

@@ -56,3 +56,53 @@ export async function apiFetch<T>(
   }
   return data as T;
 }
+
+function sleep(ms: number, signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(new DOMException("Aborted", "AbortError"));
+      return;
+    }
+    const timer = setTimeout(resolve, ms);
+    signal?.addEventListener(
+      "abort",
+      () => {
+        clearTimeout(timer);
+        reject(new DOMException("Aborted", "AbortError"));
+      },
+      { once: true },
+    );
+  });
+}
+
+/** Retry helper for transient indexer readiness errors. */
+export async function apiFetchWithIndexerRetry<T>(
+  path: string,
+  options: {
+    method?: string;
+    body?: unknown;
+    token?: string | null;
+    signal?: AbortSignal;
+    attempts?: number;
+    delayMs?: number;
+    onRetry?: (attempt: number) => void;
+  } = {},
+): Promise<T> {
+  const attempts = options.attempts ?? 8;
+  const delayMs = options.delayMs ?? 1500;
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= attempts; attempt++) {
+    try {
+      return await apiFetch<T>(path, options);
+    } catch (e) {
+      lastError = e;
+      const syncing =
+        e instanceof ApiClientError &&
+        (e.code === "indexer_syncing" || /indexer syncing/i.test(e.message));
+      if (!syncing || attempt === attempts) throw e;
+      options.onRetry?.(attempt);
+      await sleep(delayMs, options.signal);
+    }
+  }
+  throw lastError;
+}

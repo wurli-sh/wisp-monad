@@ -1,10 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import {
-  decryptEnvelope,
-  hexToBytes,
-} from "@wisp/crypto/encryption";
+import { useEffect, useState, type ReactNode } from "react";
+import { decryptEnvelope, hexToBytes } from "@wisp/crypto/encryption";
 import { noteCommitment, noteNullifier } from "@wisp/crypto/poseidon";
 import { buildInboxKeyMessage, inboxKeySeed } from "@wisp/crypto/signature";
 import {
@@ -24,13 +21,17 @@ import { getAccount } from "@wagmi/core";
 import { injected } from "wagmi/connectors";
 import { monadTestnet } from "viem/chains";
 import { formatUnits } from "viem";
-import { motion, useReducedMotion } from "framer-motion";
+import { toast } from "sonner";
+import { ArrowUpRight, ExternalLink, KeyRound } from "lucide-react";
 import { Button } from "@/components/ui/Button";
+import { SegmentedTabs } from "@/components/ui/SegmentedTabs";
+import { PageShell } from "@/components/PageShell";
+import { MotionPillButton } from "@/components/WispVisaCard";
+import { useInboxUnlock } from "@/components/InboxUnlockProvider";
 import { apiFetch } from "@/lib/api";
 import { createClient } from "@/lib/supabase/client";
 import { poolAbi } from "@/lib/abis";
-import { TextShimmer } from "@/components/ui/TextShimmer";
-import { buttonHover, buttonTap } from "@/lib/motion";
+import { friendlyError } from "@/lib/toast";
 import nacl from "tweetnacl";
 import {
   normalizeInvitesResponse,
@@ -47,6 +48,157 @@ import {
 import { parseTrustedClaimPayload } from "@/lib/claim";
 import { manifest, transactionExplorerUrl, wagmiConfig } from "@/lib/wagmi";
 import { decodeSentActivity } from "@/lib/activity";
+import { cn } from "@/lib/cn";
+import { UsdcIcon } from "@/components/UsdcIcon";
+
+function InboxTable({
+  children,
+  mobileChildren,
+  columns,
+  emptyMessage,
+  empty = false,
+  colSpan,
+}: {
+  columns: string[];
+  children: ReactNode;
+  mobileChildren?: ReactNode;
+  emptyMessage?: string;
+  empty?: boolean;
+  colSpan: number;
+}) {
+  return (
+    <div className="overflow-hidden rounded-2xl border border-border/80 bg-card shadow-card">
+      <div className="sm:hidden">
+        {empty ? (
+          <p className="px-5 py-12 text-center text-sm text-muted-foreground">
+            {emptyMessage}
+          </p>
+        ) : (
+          <div className="space-y-3 p-3">{mobileChildren}</div>
+        )}
+      </div>
+      <div className="hidden overflow-x-auto sm:block">
+        <table className="w-full min-w-[34rem] text-left text-sm">
+          <thead>
+            <tr className="border-b border-border/60 bg-muted/80">
+              {columns.map((col, index) => {
+                const isActionColumn =
+                  col === "Action" ||
+                  (col === "" && index === columns.length - 1);
+                return (
+                  <th
+                    key={col}
+                    className={cn(
+                      "px-4 py-3 text-xs font-medium uppercase tracking-wide text-muted-foreground",
+                      isActionColumn && "text-right",
+                    )}
+                  >
+                    {col}
+                  </th>
+                );
+              })}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-border/50">
+            {empty ? (
+              <tr>
+                <td
+                  colSpan={colSpan}
+                  className="px-4 py-14 text-center text-sm text-muted-foreground"
+                >
+                  {emptyMessage}
+                </td>
+              </tr>
+            ) : (
+              children
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function InboxMobileCard({ children }: { children: ReactNode }) {
+  return (
+    <article className="rounded-xl border border-border/70 bg-card p-4 shadow-soft">
+      {children}
+    </article>
+  );
+}
+
+function InboxDetail({
+  label,
+  children,
+}: {
+  label: string;
+  children: ReactNode;
+}) {
+  return (
+    <div className="min-w-0">
+      <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+        {label}
+      </p>
+      <div className="mt-1 min-w-0 text-sm text-foreground">{children}</div>
+    </div>
+  );
+}
+
+function UsdcAmount({
+  amount,
+  className,
+}: {
+  amount: string;
+  className?: string;
+}) {
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center gap-1.5 font-medium tabular-nums text-foreground",
+        className,
+      )}
+    >
+      {amount}
+      <UsdcIcon />
+      <span className="text-sm text-muted-foreground">USDC</span>
+    </span>
+  );
+}
+
+function StatusPill({
+  children,
+  tone = "muted",
+}: {
+  children: ReactNode;
+  tone?: "brand" | "success" | "muted" | "warning";
+}) {
+  const tones = {
+    brand: "border-brand-muted bg-brand-soft text-brand-ink",
+    success: "border-success/20 bg-success/10 text-success",
+    muted: "border-border bg-muted text-muted-foreground",
+    warning: "border-warning-border bg-warning-surface text-warning",
+  };
+  const dots = {
+    brand: "bg-brand",
+    success: "bg-success",
+    muted: "bg-muted-foreground",
+    warning: "bg-warning",
+  };
+  return (
+    <span
+      className={cn(
+        "radius-control inline-flex whitespace-nowrap items-center gap-1.5 border px-2.5 py-1 text-xs font-medium capitalize",
+        tones[tone],
+      )}
+    >
+      <span
+        aria-hidden="true"
+        className={cn("size-1.5 rounded-full", dots[tone])}
+      />
+      {children}
+    </span>
+  );
+}
 
 type DecryptedNote = {
   id: string;
@@ -66,7 +218,10 @@ type SentActivity = {
   createdAt: string;
 };
 
-function parseSentActivity(row: ActivityRow, plaintext: Uint8Array): SentActivity {
+function parseSentActivity(
+  row: ActivityRow,
+  plaintext: Uint8Array,
+): SentActivity {
   const raw = decodeSentActivity(plaintext, manifest);
   return {
     id: row.id,
@@ -86,10 +241,8 @@ export function InboxView() {
   const [invites, setInvites] = useState<InviteRow[]>([]);
   const [sentActivity, setSentActivity] = useState<SentActivity[]>([]);
   const [status, setStatus] = useState<string | null>(null);
-  const [privKey, setPrivKey] = useState<Uint8Array | null>(null);
+  const { privKey, setPrivKey } = useInboxUnlock();
   const [linkedWallet, setLinkedWallet] = useState<string | null>(null);
-  const reduce = useReducedMotion();
-
   const { address } = useAccount();
   const { connectAsync } = useConnect();
   const { switchChainAsync } = useSwitchChain();
@@ -115,7 +268,9 @@ export function InboxView() {
 
   async function unlock() {
     if (!userId || !linkedWallet) {
-      setStatus("Link a wallet on Register before unlocking the inbox.");
+      const msg = "Link a wallet on Account first.";
+      setStatus(msg);
+      toast.error(msg);
       return;
     }
     try {
@@ -140,8 +295,11 @@ export function InboxView() {
       const pair = nacl.box.keyPair.fromSecretKey(seed);
       setPrivKey(pair.secretKey);
       setStatus(null);
+      toast.success("Inbox unlocked");
     } catch (e) {
-      setStatus(e instanceof Error ? e.message : "Inbox unlock failed");
+      const msg = friendlyError(e, "Inbox unlock failed.");
+      setStatus(msg);
+      toast.error(msg);
     }
   }
 
@@ -203,7 +361,9 @@ export function InboxView() {
           }
         }
         setNotes(out);
-        setStatus(skipped ? `${skipped} note(s) skipped (wrong key or corrupt)` : null);
+        setStatus(
+          skipped ? `${skipped} note(s) skipped (wrong key or corrupt)` : null,
+        );
       } catch (e) {
         setStatus(e instanceof Error ? e.message : "Failed to load inbox");
       }
@@ -242,131 +402,368 @@ export function InboxView() {
         setSentActivity(decoded);
       })
       .catch((e: unknown) => {
-        setStatus(e instanceof Error ? e.message : "Failed to load sent history");
+        setStatus(
+          e instanceof Error ? e.message : "Failed to load sent history",
+        );
       });
   }, [token, privKey, tab]);
 
   if (!token) {
-    return <p className="text-muted-foreground">Sign in to open your inbox.</p>;
+    return (
+      <PageShell
+        title="Inbox"
+        subtitle="Sign in to see what’s waiting."
+        maxWidth="lg"
+      >
+        <InboxTable
+          columns={["Amount", "Note", "Status", "Action"]}
+          colSpan={4}
+          empty
+          emptyMessage="Sign in from the navbar, then unlock with your linked wallet."
+        >
+          {null}
+        </InboxTable>
+      </PageShell>
+    );
   }
 
+  const claimable = notes.filter((n) => !n.spent);
+  const history = notes.filter((n) => n.spent);
+
   return (
-    <div className="mx-auto max-w-2xl space-y-6">
-      <h1 className="text-3xl font-bold">Inbox</h1>
-      {!privKey ? (
-        <Button onClick={() => void unlock()}>Unlock inbox</Button>
-      ) : (
-        <p className="text-sm text-success">Inbox unlocked for this session</p>
-      )}
-      <div className="flex gap-2">
-        {(["claimable", "history", "sent"] as const).map((t) => (
-          <motion.button
-            key={t}
-            type="button"
-            onClick={() => setTab(t)}
-            whileHover={reduce ? undefined : buttonHover}
-            whileTap={reduce ? undefined : buttonTap}
-            className={`rounded-full px-4 py-2 text-sm font-semibold capitalize ${
-              tab === t ? "bg-brand text-white shadow-blue-pill" : "bg-muted"
-            }`}
+    <PageShell
+      title="Inbox"
+      subtitle="Notes for you — claimable, claimed, and sent."
+      maxWidth="lg"
+    >
+      <div className="mb-6 flex flex-col items-center gap-4">
+        {!privKey ? (
+          <MotionPillButton
+            onClick={() => void unlock()}
+            className="max-w-xs border-brand-dark/25 bg-brand font-semibold text-brand-foreground shadow-action hover:bg-brand-dark"
           >
-            {t}
-          </motion.button>
-        ))}
+            <KeyRound className="h-4 w-4" aria-hidden="true" />
+            Unlock inbox
+          </MotionPillButton>
+        ) : (
+          <p className="radius-control border border-success/25 bg-success/15 px-4 py-2 text-sm font-medium text-success">
+            Inbox unlocked for this session
+          </p>
+        )}
+        <SegmentedTabs
+          items={[
+            { value: "history", label: "History" },
+            { value: "claimable", label: "Claimable" },
+            { value: "sent", label: "Sent" },
+          ]}
+          value={tab}
+          onValueChange={setTab}
+          ariaLabel="Inbox sections"
+          layoutId="inbox-sections"
+        />
       </div>
 
-      {tab !== "sent" && (
-        <ul className="space-y-3">
-          {notes
-            .filter((n) => (tab === "claimable" ? !n.spent : n.spent))
-            .map((n) => (
-              <li
-                key={n.id}
-                className="flex items-center justify-between gap-3 rounded-2xl border border-border bg-card px-4 py-3"
-              >
-                <div className="min-w-0">
-                  <p className="font-bold">{n.amount} USDC</p>
-                  <p className="text-xs text-muted-foreground">
-                    {n.spent ? "Spent" : "Claimable"} · {n.commitment.slice(0, 12)}…
-                  </p>
-                </div>
-                {!n.spent && (
-                  <Button
-                    size="sm"
-                    onClick={() => {
-                      window.location.href = buildClaimUrl(
-                        window.location.origin,
-                        n.payload,
-                      );
-                    }}
-                  >
-                    Claim
-                  </Button>
-                )}
-              </li>
-            ))}
-        </ul>
+      {!privKey && (
+        <InboxTable
+          columns={["Amount", "Note", "Status", "Action"]}
+          colSpan={4}
+          empty
+          emptyMessage="Unlock once. Your notes stay private to you."
+        >
+          {null}
+        </InboxTable>
       )}
 
-      {tab === "sent" && (
-        <div className="space-y-6">
-          <ul className="space-y-3">
-            {sentActivity.map((activity) => (
-              <li
-                key={activity.id}
-                className="rounded-2xl border border-border bg-card px-4 py-3 text-sm"
+      {privKey && tab === "claimable" && (
+        <InboxTable
+          columns={["Amount", "Note", "Status", "Action"]}
+          colSpan={4}
+          empty={claimable.length === 0}
+          emptyMessage="Nothing new."
+          mobileChildren={claimable.map((n) => (
+            <InboxMobileCard key={n.id}>
+              <div className="flex items-start justify-between gap-3">
+                <UsdcAmount amount={n.amount} className="text-base" />
+                <StatusPill tone="success">Claimable</StatusPill>
+              </div>
+              <div className="mt-4">
+                <InboxDetail label="Note">
+                  <span className="block truncate font-mono text-xs text-muted-foreground">
+                    {n.commitment.slice(0, 14)}…
+                  </span>
+                </InboxDetail>
+              </div>
+              <Button
+                className="mt-4 w-full"
+                onClick={() => {
+                  window.location.href = buildClaimUrl(
+                    window.location.origin,
+                    n.payload,
+                  );
+                }}
               >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="break-words font-semibold">
-                      {activity.amount} USDC to {activity.recipient}
-                    </p>
-                    <p className="break-words text-muted-foreground">
-                      {activity.delivery.replaceAll("_", " ")} · {new Date(activity.createdAt).toLocaleString()}
-                    </p>
+                <ArrowUpRight className="h-4 w-4" aria-hidden="true" />
+                Claim
+              </Button>
+            </InboxMobileCard>
+          ))}
+        >
+          {claimable.map((n) => (
+            <tr key={n.id} className="transition-colors hover:bg-selection/60">
+              <td className="whitespace-nowrap px-4 py-4">
+                <UsdcAmount amount={n.amount} />
+              </td>
+              <td className="px-4 py-4 font-mono text-xs text-muted-foreground">
+                {n.commitment.slice(0, 14)}…
+              </td>
+              <td className="px-4 py-4">
+                <StatusPill tone="success">Claimable</StatusPill>
+              </td>
+              <td className="px-4 py-4 text-right">
+                <Button
+                  size="sm"
+                  onClick={() => {
+                    window.location.href = buildClaimUrl(
+                      window.location.origin,
+                      n.payload,
+                    );
+                  }}
+                >
+                  <ArrowUpRight className="h-4 w-4" aria-hidden="true" />
+                  Claim
+                </Button>
+              </td>
+            </tr>
+          ))}
+        </InboxTable>
+      )}
+
+      {privKey && tab === "history" && (
+        <InboxTable
+          columns={["Amount", "Note", "Status"]}
+          colSpan={3}
+          empty={history.length === 0}
+          emptyMessage="Nothing claimed yet."
+          mobileChildren={history.map((n) => (
+            <InboxMobileCard key={n.id}>
+              <div className="flex items-start justify-between gap-3">
+                <UsdcAmount amount={n.amount} className="text-base" />
+                <StatusPill>Spent</StatusPill>
+              </div>
+              <div className="mt-4">
+                <InboxDetail label="Note">
+                  <span className="block truncate font-mono text-xs text-muted-foreground">
+                    {n.commitment.slice(0, 14)}…
+                  </span>
+                </InboxDetail>
+              </div>
+            </InboxMobileCard>
+          ))}
+        >
+          {history.map((n) => (
+            <tr key={n.id} className="transition-colors hover:bg-selection/60">
+              <td className="whitespace-nowrap px-4 py-4">
+                <UsdcAmount amount={n.amount} />
+              </td>
+              <td className="px-4 py-4 font-mono text-xs text-muted-foreground">
+                {n.commitment.slice(0, 14)}…
+              </td>
+              <td className="px-4 py-4">
+                <StatusPill>Spent</StatusPill>
+              </td>
+            </tr>
+          ))}
+        </InboxTable>
+      )}
+
+      {privKey && tab === "sent" && (
+        <div className="space-y-6">
+          <InboxTable
+            columns={["Amount", "Recipient", "Delivery", "When", ""]}
+            colSpan={5}
+            empty={sentActivity.length === 0}
+            emptyMessage="Nothing sent yet."
+            mobileChildren={sentActivity.map((activity) => {
+              const deliveryTone =
+                activity.delivery === "registered"
+                  ? "success"
+                  : activity.delivery === "recovery_required"
+                    ? "warning"
+                    : "brand";
+              return (
+                <InboxMobileCard key={activity.id}>
+                  <div className="flex items-start justify-between gap-3">
+                    <UsdcAmount
+                      amount={activity.amount}
+                      className="text-base"
+                    />
+                    <StatusPill tone={deliveryTone}>
+                      {activity.delivery.replaceAll("_", " ")}
+                    </StatusPill>
+                  </div>
+                  <div className="mt-4 grid gap-3">
+                    <InboxDetail label="Recipient">
+                      <span className="block truncate">
+                        {activity.recipient}
+                      </span>
+                    </InboxDetail>
+                    <InboxDetail label="Sent">
+                      <span className="text-muted-foreground">
+                        {new Date(activity.createdAt).toLocaleString()}
+                      </span>
+                    </InboxDetail>
                   </div>
                   <a
-                    className="shrink-0 text-brand underline"
+                    className="mt-4 inline-flex min-h-10 items-center gap-1.5 text-sm font-medium text-brand transition-colors duration-100 ease-out hover:text-brand-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                     href={transactionExplorerUrl(activity.depositTxHash)}
                     target="_blank"
                     rel="noreferrer"
                   >
+                    <ExternalLink className="h-4 w-4" aria-hidden="true" />
+                    View on explorer
+                  </a>
+                </InboxMobileCard>
+              );
+            })}
+          >
+            {sentActivity.map((activity) => (
+              <tr
+                key={activity.id}
+                className="transition-colors hover:bg-selection/60"
+              >
+                <td className="whitespace-nowrap px-4 py-4">
+                  <UsdcAmount amount={activity.amount} />
+                </td>
+                <td className="max-w-[10rem] truncate px-4 py-4 text-sm text-foreground">
+                  {activity.recipient}
+                </td>
+                <td className="px-4 py-4">
+                  <StatusPill
+                    tone={
+                      activity.delivery === "registered"
+                        ? "success"
+                        : activity.delivery === "recovery_required"
+                          ? "warning"
+                          : "brand"
+                    }
+                  >
+                    {activity.delivery.replaceAll("_", " ")}
+                  </StatusPill>
+                </td>
+                <td className="whitespace-nowrap px-4 py-4 text-xs text-muted-foreground">
+                  {new Date(activity.createdAt).toLocaleString()}
+                </td>
+                <td className="px-4 py-4 text-right">
+                  <a
+                    className="inline-flex min-h-10 items-center gap-1.5 rounded-lg px-3 text-sm font-medium text-brand transition-colors duration-100 ease-out hover:bg-brand-soft hover:text-brand-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                    href={transactionExplorerUrl(activity.depositTxHash)}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
                     Explorer
                   </a>
-                </div>
-              </li>
+                </td>
+              </tr>
             ))}
-          </ul>
+          </InboxTable>
+
           {invites.length > 0 && (
-            <div className="space-y-2">
-              <p className="text-sm font-semibold">Email delivery status</p>
-              <ul className="space-y-3">
-                {invites.map((inv) => (
-                  <li
-                    key={inv.id}
-                    className="rounded-2xl border border-border bg-card px-4 py-3 text-sm"
-                  >
-                    <p className="font-semibold">{inv.normalizedHandle}</p>
-                    <p className="text-muted-foreground">
-                      {inv.deliveryKind} · created {new Date(inv.createdAt).toLocaleString()}
-                      {inv.deliveredAt ? " · delivered" : ""}
-                      {inv.claimedAt ? " · claimed" : ""}
-                    </p>
-                  </li>
+            <div className="space-y-3">
+              <p className="text-center text-sm font-semibold text-foreground">
+                Email delivery status
+              </p>
+              <InboxTable
+                columns={["Recipient", "Kind", "Status", "Created"]}
+                colSpan={4}
+                mobileChildren={invites.map((inv) => (
+                  <InboxMobileCard key={inv.id}>
+                    <div className="flex items-start justify-between gap-3">
+                      <InboxDetail label="Recipient">
+                        <span className="block truncate">
+                          {inv.normalizedHandle}
+                        </span>
+                      </InboxDetail>
+                      <StatusPill
+                        tone={
+                          inv.claimedAt
+                            ? "success"
+                            : inv.deliveredAt
+                              ? "muted"
+                              : "warning"
+                        }
+                      >
+                        {inv.claimedAt
+                          ? "Claimed"
+                          : inv.deliveredAt
+                            ? "Delivered"
+                            : "Pending"}
+                      </StatusPill>
+                    </div>
+                    <div className="mt-4 grid grid-cols-2 gap-3">
+                      <InboxDetail label="Delivery">
+                        <span className="text-muted-foreground">
+                          {inv.deliveryKind}
+                        </span>
+                      </InboxDetail>
+                      <InboxDetail label="Created">
+                        <span className="text-xs text-muted-foreground">
+                          {new Date(inv.createdAt).toLocaleString()}
+                        </span>
+                      </InboxDetail>
+                    </div>
+                  </InboxMobileCard>
                 ))}
-              </ul>
+              >
+                {invites.map((inv) => (
+                  <tr
+                    key={inv.id}
+                    className="transition-colors hover:bg-selection/60"
+                  >
+                    <td className="px-4 py-4 text-sm text-foreground">
+                      {inv.normalizedHandle}
+                    </td>
+                    <td className="px-4 py-4 text-sm text-muted-foreground">
+                      {inv.deliveryKind}
+                    </td>
+                    <td className="px-4 py-4">
+                      <StatusPill
+                        tone={
+                          inv.claimedAt
+                            ? "success"
+                            : inv.deliveredAt
+                              ? "muted"
+                              : "warning"
+                        }
+                      >
+                        {inv.claimedAt
+                          ? "Claimed"
+                          : inv.deliveredAt
+                            ? "Delivered"
+                            : "Pending"}
+                      </StatusPill>
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-4 text-xs text-muted-foreground">
+                      {new Date(inv.createdAt).toLocaleString()}
+                    </td>
+                  </tr>
+                ))}
+              </InboxTable>
             </div>
           )}
         </div>
       )}
 
-      {status && <p className="text-sm text-muted-foreground">{status}</p>}
+      {status && (
+        <p className="mt-4 text-center text-sm text-muted-foreground">
+          {status}
+        </p>
+      )}
       {!address && privKey && (
-        <p className="text-sm text-warning">Connect wallet to claim notes.</p>
+        <p className="mt-2 text-center text-sm text-warning">
+          Connect wallet to claim.
+        </p>
       )}
-      {privKey && notes.length === 0 && tab !== "sent" && (
-        <TextShimmer active={false}>No notes yet</TextShimmer>
-      )}
-    </div>
+    </PageShell>
   );
 }

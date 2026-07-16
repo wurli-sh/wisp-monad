@@ -10,19 +10,24 @@ import { useConnect, useSignMessage, useSwitchChain } from "wagmi";
 import { getAccount } from "@wagmi/core";
 import { injected } from "wagmi/connectors";
 import { monadTestnet } from "viem/chains";
+import { Inbox, Wallet } from "lucide-react";
 import { Button } from "@/components/ui/Button";
+import { PageShell } from "@/components/PageShell";
+import { SignInAuthPanel } from "@/components/SignInAuthPanel";
 import { apiFetch } from "@/lib/api";
 import { createClient } from "@/lib/supabase/client";
+import {
+  toSupabaseProvider,
+  type WispOAuthProvider,
+} from "@/lib/supabase/providers";
 import { TextShimmer } from "@/components/ui/TextShimmer";
+import { AccountSkeleton } from "@/components/ui/Skeleton";
 import { wagmiConfig } from "@/lib/wagmi";
 import type { ApiMeResponse } from "@/lib/api-contracts";
 
 export function RegisterFlow() {
   const params = useSearchParams();
   const router = useRouter();
-  const [email, setEmail] = useState("");
-  const [otpSent, setOtpSent] = useState(false);
-  const [otp, setOtp] = useState("");
   const [status, setStatus] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [sessionToken, setSessionToken] = useState<string | null>(null);
@@ -30,6 +35,7 @@ export function RegisterFlow() {
   const [sessionLoaded, setSessionLoaded] = useState(false);
   const [meLoading, setMeLoading] = useState(false);
   const sessionTokenRef = useRef<string | null>(null);
+  const oauthStarted = useRef(false);
 
   const { connectAsync } = useConnect();
   const { switchChainAsync } = useSwitchChain();
@@ -75,43 +81,17 @@ export function RegisterFlow() {
       .finally(() => setMeLoading(false));
   }, [sessionToken]);
 
-  async function oauth(provider: "google" | "twitter") {
+  async function oauth(provider: WispOAuthProvider) {
     setBusy(true);
     const supabase = createClient();
     const { error } = await supabase.auth.signInWithOAuth({
-      provider,
+      provider: toSupabaseProvider(provider),
       options: {
         redirectTo: `${window.location.origin}/auth/callback?next=/register`,
       },
     });
     if (error) setStatus(error.message);
     setBusy(false);
-  }
-
-  async function sendOtp() {
-    setBusy(true);
-    setStatus(null);
-    const supabase = createClient();
-    const { error } = await supabase.auth.signInWithOtp({ email });
-    setBusy(false);
-    if (error) {
-      setStatus(error.message);
-      return;
-    }
-    setOtpSent(true);
-    setStatus("Check your email for a one-time code.");
-  }
-
-  async function verifyOtp() {
-    setBusy(true);
-    const supabase = createClient();
-    const { error } = await supabase.auth.verifyOtp({
-      email,
-      token: otp,
-      type: "email",
-    });
-    setBusy(false);
-    if (error) setStatus(error.message);
   }
 
   async function linkWallet() {
@@ -171,92 +151,76 @@ export function RegisterFlow() {
   const authError = params.get("authError");
 
   useEffect(() => {
-    if (preferred === "google") void oauth("google");
-    if (preferred === "x") void oauth("twitter");
+    if (oauthStarted.current || sessionToken) return;
+    if (preferred === "google") {
+      oauthStarted.current = true;
+      void oauth("google");
+    }
+    if (preferred === "x") {
+      oauthStarted.current = true;
+      void oauth("x");
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [sessionToken]);
 
   if (!sessionLoaded || (sessionToken && meLoading)) {
-    return (
-      <div className="mx-auto max-w-lg text-center">
-        <TextShimmer>Loading account…</TextShimmer>
-      </div>
-    );
+    return <AccountSkeleton />;
   }
 
   if (sessionToken && me?.wallet) {
     return (
-      <div className="mx-auto max-w-lg space-y-4 text-center">
-        <h1 className="text-3xl font-bold">You are registered</h1>
-        <p className="text-muted-foreground">Wallet and inbox key are linked.</p>
-        <Button onClick={() => router.push("/inbox")}>Open inbox</Button>
-      </div>
+      <PageShell
+        title="You’re in."
+        subtitle="Wallet and inbox are linked."
+        maxWidth="sm"
+      >
+        <div className="flex justify-center">
+          <Button onClick={() => router.push("/inbox")}>
+            <Inbox className="h-4 w-4" aria-hidden="true" />
+            Open inbox
+          </Button>
+        </div>
+      </PageShell>
     );
   }
 
   if (sessionToken) {
     return (
-      <div className="mx-auto max-w-lg space-y-6">
-        <h1 className="text-3xl font-bold">Link your wallet</h1>
-        <p className="text-muted-foreground">
-          Sign a one-time challenge and an inbox-key message. Wisp never stores your
-          private key.
-        </p>
-        <Button disabled={busy} onClick={linkWallet}>
-          {busy ? <TextShimmer>Linking…</TextShimmer> : "Connect & link wallet"}
-        </Button>
-        {status && <p className="text-sm text-destructive">{status}</p>}
-      </div>
+      <PageShell
+        title="Link your wallet"
+        subtitle="One signature to link your wallet. We never hold your keys."
+        maxWidth="sm"
+      >
+        <div className="flex flex-col items-center gap-4">
+          <Button disabled={busy} onClick={() => void linkWallet()}>
+            {busy ? (
+              <TextShimmer>Linking…</TextShimmer>
+            ) : (
+              <>
+                <Wallet className="h-4 w-4" aria-hidden="true" />
+                Connect & link wallet
+              </>
+            )}
+          </Button>
+          {status && <p className="text-sm text-destructive">{status}</p>}
+        </div>
+      </PageShell>
     );
   }
 
   return (
-    <div className="mx-auto max-w-lg space-y-6">
-      <h1 className="text-3xl font-bold">Create your Wisp account</h1>
-      {authError && (
-        <p className="rounded-xl border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
-          Sign-in did not complete. Please try again.
-        </p>
-      )}
-      <p className="text-muted-foreground">
-        Continue with Google, X, or email. X handles are verified via OAuth — there is
-        no free-form claim field.
-      </p>
-      <div className="flex flex-col gap-3">
-        <Button disabled={busy} variant="outline" onClick={() => oauth("google")}>
-          Continue with Google
-        </Button>
-        <Button disabled={busy} variant="outline" onClick={() => oauth("twitter")}>
-          Continue with X
-        </Button>
-      </div>
-      <div className="space-y-3 rounded-2xl border border-border bg-card p-5">
-        <p className="text-sm font-semibold">Email OTP</p>
-        <input
-          className="w-full rounded-xl border-2 border-border bg-background px-4 py-3"
-          placeholder="you@example.com"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
+    <PageShell
+      title="Create your Wisp account"
+      subtitle="Continue with Google, X, or email. That’s your Wisp handle."
+      maxWidth="sm"
+    >
+      <div className="radius-surface border border-border/80 bg-card p-6 shadow-card sm:p-8">
+        <SignInAuthPanel
+          authError={Boolean(authError)}
+          onAuthenticated={() => router.refresh()}
         />
-        {!otpSent ? (
-          <Button disabled={busy || !email} onClick={sendOtp}>
-            Send code
-          </Button>
-        ) : (
-          <>
-            <input
-              className="w-full rounded-xl border-2 border-border bg-background px-4 py-3"
-              placeholder="One-time code"
-              value={otp}
-              onChange={(e) => setOtp(e.target.value)}
-            />
-            <Button disabled={busy || !otp} onClick={verifyOtp}>
-              Verify
-            </Button>
-          </>
-        )}
+        {status && <p className="mt-4 text-sm text-muted-foreground">{status}</p>}
       </div>
-      {status && <p className="text-sm text-muted-foreground">{status}</p>}
-    </div>
+    </PageShell>
   );
 }
