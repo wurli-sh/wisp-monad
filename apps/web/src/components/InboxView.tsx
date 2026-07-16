@@ -21,9 +21,11 @@ import { getAccount } from "@wagmi/core";
 import { injected } from "wagmi/connectors";
 import { monadTestnet } from "viem/chains";
 import { formatUnits } from "viem";
+import { motion, useReducedMotion } from "framer-motion";
 import { toast } from "sonner";
 import { ArrowUpRight, ExternalLink, KeyRound } from "lucide-react";
 import { Button } from "@/components/ui/Button";
+import { Skeleton } from "@/components/ui/Skeleton";
 import { SegmentedTabs } from "@/components/ui/SegmentedTabs";
 import { PageShell } from "@/components/PageShell";
 import { MotionPillButton } from "@/components/WispVisaCard";
@@ -51,12 +53,42 @@ import { decodeSentActivity } from "@/lib/activity";
 import { cn } from "@/lib/cn";
 import { UsdcIcon } from "@/components/UsdcIcon";
 
+function AnimatedTableRow({
+  children,
+  index,
+}: {
+  children: ReactNode;
+  index: number;
+}) {
+  const reduce = useReducedMotion();
+
+  return (
+    <motion.tr
+      initial={reduce ? false : { opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={
+        reduce
+          ? { duration: 0 }
+          : {
+              duration: 0.2,
+              delay: Math.min(index, 6) * 0.03,
+              ease: "easeOut",
+            }
+      }
+      className="transition-colors duration-100 ease-out hover:bg-selection/60"
+    >
+      {children}
+    </motion.tr>
+  );
+}
+
 function InboxTable({
   children,
   mobileChildren,
   columns,
   emptyMessage,
   empty = false,
+  loading = false,
   colSpan,
 }: {
   columns: string[];
@@ -64,12 +96,29 @@ function InboxTable({
   mobileChildren?: ReactNode;
   emptyMessage?: string;
   empty?: boolean;
+  loading?: boolean;
   colSpan: number;
 }) {
   return (
     <div className="overflow-hidden rounded-2xl border border-border/80 bg-card shadow-card">
       <div className="sm:hidden">
-        {empty ? (
+        {loading ? (
+          <div className="space-y-3 p-3" aria-label="Loading inbox rows">
+            {Array.from({ length: 2 }).map((_, index) => (
+              <div
+                key={index}
+                className="rounded-xl border border-border/70 bg-card p-4 shadow-soft"
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <Skeleton className="h-4 w-24" />
+                  <Skeleton className="radius-control h-6 w-20" />
+                </div>
+                <Skeleton className="mt-5 h-4 w-2/3" />
+                <Skeleton className="radius-control mt-4 h-10 w-full" />
+              </div>
+            ))}
+          </div>
+        ) : empty ? (
           <p className="px-5 py-12 text-center text-sm text-muted-foreground">
             {emptyMessage}
           </p>
@@ -99,8 +148,30 @@ function InboxTable({
               })}
             </tr>
           </thead>
-          <tbody className="divide-y divide-border/50">
-            {empty ? (
+          <tbody
+            className="divide-y divide-border/50"
+            aria-busy={loading || undefined}
+          >
+            {loading ? (
+              Array.from({ length: 3 }).map((_, rowIndex) => (
+                <tr key={rowIndex} aria-hidden="true">
+                  {columns.map((_, columnIndex) => (
+                    <td key={columnIndex} className="px-4 py-4">
+                      <Skeleton
+                        className={cn(
+                          "h-4",
+                          columnIndex === columns.length - 1
+                            ? "ml-auto w-16"
+                            : columnIndex % 2 === 0
+                              ? "w-24"
+                              : "w-32",
+                        )}
+                      />
+                    </td>
+                  ))}
+                </tr>
+              ))
+            ) : empty ? (
               <tr>
                 <td
                   colSpan={colSpan}
@@ -240,6 +311,10 @@ export function InboxView() {
   const [notes, setNotes] = useState<DecryptedNote[]>([]);
   const [invites, setInvites] = useState<InviteRow[]>([]);
   const [sentActivity, setSentActivity] = useState<SentActivity[]>([]);
+  const [notesLoading, setNotesLoading] = useState(true);
+  const [invitesLoading, setInvitesLoading] = useState(true);
+  const [activityLoading, setActivityLoading] = useState(true);
+  const [tableDelayDone, setTableDelayDone] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
   const { privKey, setPrivKey } = useInboxUnlock();
   const [linkedWallet, setLinkedWallet] = useState<string | null>(null);
@@ -248,6 +323,14 @@ export function InboxView() {
   const { switchChainAsync } = useSwitchChain();
   const { signMessageAsync } = useSignMessage();
   const publicClient = usePublicClient();
+  const reduce = useReducedMotion();
+
+  useEffect(() => {
+    setTableDelayDone(false);
+    const delay = reduce ? 0 : 400;
+    const id = window.setTimeout(() => setTableDelayDone(true), delay);
+    return () => window.clearTimeout(id);
+  }, [privKey, reduce, tab]);
 
   useEffect(() => {
     createClient()
@@ -305,6 +388,7 @@ export function InboxView() {
 
   useEffect(() => {
     if (!token || !privKey || !publicClient) return;
+    setNotesLoading(true);
     void (async () => {
       try {
         const response = await apiFetch<{ notes: ApiNoteRow[] }>("/v1/notes", {
@@ -366,19 +450,24 @@ export function InboxView() {
         );
       } catch (e) {
         setStatus(e instanceof Error ? e.message : "Failed to load inbox");
+      } finally {
+        setNotesLoading(false);
       }
     })();
   }, [token, privKey, publicClient]);
 
   useEffect(() => {
     if (!token || tab !== "sent") return;
+    setInvitesLoading(true);
     apiFetch<{ invites: ApiInviteRow[] }>("/v1/invites", { token })
       .then((response) => setInvites(normalizeInvitesResponse(response)))
-      .catch(() => setInvites([]));
+      .catch(() => setInvites([]))
+      .finally(() => setInvitesLoading(false));
   }, [token, tab]);
 
   useEffect(() => {
     if (!token || !privKey || tab !== "sent") return;
+    setActivityLoading(true);
     void apiFetch<{ activity: ApiActivityRow[] }>("/v1/activity", { token })
       .then((response) => {
         const decoded: SentActivity[] = [];
@@ -405,7 +494,8 @@ export function InboxView() {
         setStatus(
           e instanceof Error ? e.message : "Failed to load sent history",
         );
-      });
+      })
+      .finally(() => setActivityLoading(false));
   }, [token, privKey, tab]);
 
   if (!token) {
@@ -478,6 +568,7 @@ export function InboxView() {
         <InboxTable
           columns={["Amount", "Note", "Status", "Action"]}
           colSpan={4}
+          loading={!tableDelayDone || notesLoading}
           empty={claimable.length === 0}
           emptyMessage="Nothing new."
           mobileChildren={claimable.map((n) => (
@@ -508,8 +599,8 @@ export function InboxView() {
             </InboxMobileCard>
           ))}
         >
-          {claimable.map((n) => (
-            <tr key={n.id} className="transition-colors hover:bg-selection/60">
+          {claimable.map((n, index) => (
+            <AnimatedTableRow key={n.id} index={index}>
               <td className="whitespace-nowrap px-4 py-4">
                 <UsdcAmount amount={n.amount} />
               </td>
@@ -533,7 +624,7 @@ export function InboxView() {
                   Claim
                 </Button>
               </td>
-            </tr>
+            </AnimatedTableRow>
           ))}
         </InboxTable>
       )}
@@ -542,6 +633,7 @@ export function InboxView() {
         <InboxTable
           columns={["Amount", "Note", "Status"]}
           colSpan={3}
+          loading={!tableDelayDone || notesLoading}
           empty={history.length === 0}
           emptyMessage="Nothing claimed yet."
           mobileChildren={history.map((n) => (
@@ -560,8 +652,8 @@ export function InboxView() {
             </InboxMobileCard>
           ))}
         >
-          {history.map((n) => (
-            <tr key={n.id} className="transition-colors hover:bg-selection/60">
+          {history.map((n, index) => (
+            <AnimatedTableRow key={n.id} index={index}>
               <td className="whitespace-nowrap px-4 py-4">
                 <UsdcAmount amount={n.amount} />
               </td>
@@ -571,7 +663,7 @@ export function InboxView() {
               <td className="px-4 py-4">
                 <StatusPill>Spent</StatusPill>
               </td>
-            </tr>
+            </AnimatedTableRow>
           ))}
         </InboxTable>
       )}
@@ -581,6 +673,9 @@ export function InboxView() {
           <InboxTable
             columns={["Amount", "Recipient", "Delivery", "When", ""]}
             colSpan={5}
+            loading={
+              !tableDelayDone || activityLoading || invitesLoading
+            }
             empty={sentActivity.length === 0}
             emptyMessage="Nothing sent yet."
             mobileChildren={sentActivity.map((activity) => {
@@ -626,11 +721,8 @@ export function InboxView() {
               );
             })}
           >
-            {sentActivity.map((activity) => (
-              <tr
-                key={activity.id}
-                className="transition-colors hover:bg-selection/60"
-              >
+            {sentActivity.map((activity, index) => (
+              <AnimatedTableRow key={activity.id} index={index}>
                 <td className="whitespace-nowrap px-4 py-4">
                   <UsdcAmount amount={activity.amount} />
                 </td>
@@ -664,7 +756,7 @@ export function InboxView() {
                     Explorer
                   </a>
                 </td>
-              </tr>
+              </AnimatedTableRow>
             ))}
           </InboxTable>
 
@@ -676,6 +768,7 @@ export function InboxView() {
               <InboxTable
                 columns={["Recipient", "Kind", "Status", "Created"]}
                 colSpan={4}
+                loading={!tableDelayDone || invitesLoading}
                 mobileChildren={invites.map((inv) => (
                   <InboxMobileCard key={inv.id}>
                     <div className="flex items-start justify-between gap-3">
@@ -715,11 +808,8 @@ export function InboxView() {
                   </InboxMobileCard>
                 ))}
               >
-                {invites.map((inv) => (
-                  <tr
-                    key={inv.id}
-                    className="transition-colors hover:bg-selection/60"
-                  >
+                {invites.map((inv, index) => (
+                  <AnimatedTableRow key={inv.id} index={index}>
                     <td className="px-4 py-4 text-sm text-foreground">
                       {inv.normalizedHandle}
                     </td>
@@ -746,7 +836,7 @@ export function InboxView() {
                     <td className="whitespace-nowrap px-4 py-4 text-xs text-muted-foreground">
                       {new Date(inv.createdAt).toLocaleString()}
                     </td>
-                  </tr>
+                  </AnimatedTableRow>
                 ))}
               </InboxTable>
             </div>

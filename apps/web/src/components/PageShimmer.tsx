@@ -3,7 +3,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 
-const DEFAULT_MS = 1000;
+const DEFAULT_MS = 400;
 
 /**
  * Holds a shimmer skeleton for a minimum duration on mount, then fades to children.
@@ -13,10 +13,12 @@ export function PageShimmer({
   skeleton,
   children,
   minMs = DEFAULT_MS,
+  animateContent = true,
 }: {
   skeleton: ReactNode;
   children: ReactNode;
   minMs?: number;
+  animateContent?: boolean;
 }) {
   const reduce = useReducedMotion();
   const [ready, setReady] = useState(false);
@@ -46,9 +48,13 @@ export function PageShimmer({
       ) : (
         <motion.div
           key="content"
-          initial={reduce ? false : { opacity: 0, y: 8 }}
+          initial={reduce || !animateContent ? false : { opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
+          transition={
+            reduce || !animateContent
+              ? { duration: 0 }
+              : { duration: 0.35, ease: [0.16, 1, 0.3, 1] }
+          }
         >
           {children}
         </motion.div>

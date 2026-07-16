@@ -7,7 +7,7 @@ import { InboxSkeleton } from "@/components/ui/Skeleton";
 
 export default function InboxPage() {
   return (
-    <PageShimmer skeleton={<InboxSkeleton />}>
+    <PageShimmer skeleton={<InboxSkeleton />} animateContent={false}>
       <Suspense fallback={<InboxSkeleton />}>
         <InboxView />
       </Suspense>
