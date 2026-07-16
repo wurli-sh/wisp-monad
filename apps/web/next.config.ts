@@ -1,8 +1,13 @@
 import type { NextConfig } from "next";
+import { existsSync } from "node:fs";
 import path from "node:path";
+import { loadEnvFile } from "node:process";
 import { fileURLToPath } from "node:url";
 
 const root = path.join(path.dirname(fileURLToPath(import.meta.url)), "../..");
+const rootEnv = path.join(root, ".env");
+if (existsSync(rootEnv)) loadEnvFile(rootEnv);
+
 const isDev = process.env.NODE_ENV === "development";
 
 const scriptSrc = [

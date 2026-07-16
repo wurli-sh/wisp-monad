@@ -6,7 +6,7 @@
     "node": ">=22"
   },
   "scripts": {
-    "dev": "pnpm -r --parallel --if-present run dev",
+    "dev": "bash scripts/dev.sh",
     "build": "pnpm -r --if-present run build",
     "lint": "pnpm -r --if-present run lint",
     "typecheck": "pnpm -r --if-present run typecheck",
@@ -31,14 +31,17 @@
   "devDependencies": {
     "typescript": "5.8.3"
   },
-  "pnpm": {
-    "overrides": {
-      "@supabase/auth-js": "2.70.0",
-      "underscore": "1.13.8",
-      "ws": "8.21.0",
-      "motion-dom": "12.40.0",
-      "motion-utils": "12.39.0",
-      "framer-motion": "12.40.0"
-    }
-  }
+  "overrides": {
+    "@supabase/auth-js": "2.70.0",
+    "underscore": "1.13.8",
+    "ws": "8.21.0",
+    "motion-dom": "12.40.0",
+    "motion-utils": "12.39.0",
+    "framer-motion": "12.40.0"
+  },
+  "workspaces": [
+    "apps/*",
+    "packages/*",
+    "circuits"
+  ]
 }
