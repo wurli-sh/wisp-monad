@@ -57,7 +57,7 @@ Import the same repository in Vercel with these project settings:
 Link the local frontend directory to that project once:
 
 ```bash
-vercel link --cwd apps/web
+vercel link --cwd .
 ```
 
 ## 3. Sync every environment variable

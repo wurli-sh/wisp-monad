@@ -76,7 +76,7 @@ if (args.dryRun) {
       method: "POST",
       body: JSON.stringify({ deployMode: "build_and_deploy" }),
     });
-    runVercel(["deploy", "--prod", "--yes", "--cwd", resolve(root, "apps/web")]);
+    runVercel(["deploy", "--prod", "--yes", "--cwd", root]);
     console.log("triggered Render and Vercel production deployments");
   } else {
     console.log("environment sync complete; pass --deploy to redeploy both services now");
@@ -210,7 +210,6 @@ async function findRenderService(token, name) {
   const services = response.map((entry) => entry.service ?? entry);
   const service = services.find((entry) => entry.name === name);
   if (!service) return null;
-  getRenderServiceUrl(service);
   return service;
 }
 
@@ -221,7 +220,7 @@ async function createRenderService(token, args, values) {
   if (!ownerId) fail("missing Render owner; pass --render-owner <workspace-id>");
   if (!repo) fail("missing GitHub repository; pass --repo <https-url>");
 
-  return renderRequest(token, "/services", {
+  const response = await renderRequest(token, "/services", {
     method: "POST",
     body: JSON.stringify({
       type: "web_service",
@@ -244,12 +243,28 @@ async function createRenderService(token, args, values) {
       },
     }),
   });
+  const created = response?.service ?? response;
+  if (created && getOptionalRenderServiceUrl(created)) return created;
+  return waitForRenderService(token, args.renderService);
 }
 
 function getRenderServiceUrl(service) {
-  const url = service.url ?? service.serviceDetails?.url;
+  const url = getOptionalRenderServiceUrl(service);
   if (!url) fail(`Render service has no public URL yet: ${service.name}`);
   return url;
+}
+
+function getOptionalRenderServiceUrl(service) {
+  return service?.url ?? service?.serviceDetails?.url;
+}
+
+async function waitForRenderService(token, name) {
+  for (let attempt = 0; attempt < 15; attempt += 1) {
+    const service = await findRenderService(token, name);
+    if (service && getOptionalRenderServiceUrl(service)) return service;
+    await new Promise((resolvePromise) => setTimeout(resolvePromise, 2_000));
+  }
+  fail(`Render service URL was not assigned in time: ${name}`);
 }
 
 function inferGithubRepo() {
@@ -286,13 +301,13 @@ async function syncRenderEnv(token, serviceId, desired) {
 }
 
 function syncVercelEnv(values) {
-  const projectFile = resolve(root, "apps/web/.vercel/project.json");
+  const projectFile = resolve(root, ".vercel/project.json");
   if (!existsSync(projectFile)) {
-    fail("Vercel project is not linked; run `vercel link --cwd apps/web` once");
+    fail("Vercel project is not linked; run `vercel link --cwd .` once");
   }
   for (const [key, value] of values) {
     runVercel(
-      ["env", "add", key, "production", "--force", "--cwd", resolve(root, "apps/web")],
+      ["env", "add", key, "production", "--force", "--cwd", root],
       `${value}\n`,
     );
   }
@@ -321,7 +336,8 @@ async function renderRequest(token, path, init = {}) {
     const detail = await response.text();
     fail(`Render API ${response.status}: ${detail.slice(0, 300)}`);
   }
-  return response.json();
+  const body = await response.text();
+  return body ? JSON.parse(body) : undefined;
 }
 
 function fail(message) {
