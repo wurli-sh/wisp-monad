@@ -68,15 +68,20 @@ variables through Render's API, and upserts all public frontend variables throug
 the linked Vercel CLI project. Values are sent over stdin/API request bodies and
 are not printed or placed in command arguments.
 
-Create a Render API key, then keep it only in your shell or ignored `.env`:
+Authenticate the Render CLI once. An API key in the shell or ignored `.env` also
+works for CI automation:
 
 ```bash
-export RENDER_API_KEY=<render-api-key>
-pnpm deploy:env -- --web-origin https://<vercel-production-origin> --deploy
+render login
+pnpm deploy:env -- \
+  --web-origin https://<vercel-production-origin> \
+  --create-render \
+  --deploy
 ```
 
-Use `--render-service <name>` if the Blueprint service was renamed. To validate
-the local values without contacting either platform:
+Omit `--create-render` after the first deployment. Use `--render-service <name>`
+if the service was renamed. To validate the local values without contacting
+either platform:
 
 ```bash
 pnpm deploy:env -- --dry-run \

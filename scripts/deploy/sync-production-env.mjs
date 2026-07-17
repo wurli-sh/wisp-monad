@@ -1,7 +1,8 @@
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
+import { homedir } from "node:os";
 import { loadEnvFile } from "node:process";
-import { resolve } from "node:path";
+import { join, resolve } from "node:path";
 
 const root = resolve(import.meta.dirname, "../..");
 const args = parseArgs(process.argv.slice(2));
@@ -12,37 +13,35 @@ loadEnvFile(envPath);
 args.webOrigin ??= process.env.DEPLOY_WEB_ORIGIN;
 
 const webOrigin = normalizeOrigin(args.webOrigin, "--web-origin");
-const renderToken = process.env.RENDER_API_KEY?.trim();
+const renderToken = process.env.RENDER_API_KEY?.trim() || readRenderCliCredential()?.token;
 if (!args.dryRun && !renderToken) {
-  fail("RENDER_API_KEY is required (keep it in your shell or ignored .env file)");
+  fail("Render authentication is required; run `render login` or set RENDER_API_KEY");
 }
 
-const renderService = args.dryRun
+let renderService = args.dryRun
   ? {
       id: "dry-run",
       name: args.renderService,
       url: normalizeOrigin(args.apiOrigin, "--api-origin in dry-run mode"),
     }
   : await findRenderService(renderToken, args.renderService);
-const apiOrigin = normalizeOrigin(args.apiOrigin ?? renderService.url, "Render service URL");
+if (!renderService && !args.createRender) {
+  fail(`Render service not found: ${args.renderService}; pass --create-render for the first deploy`);
+}
+if (!renderService) {
+  const bootstrapOrigin = normalizeOrigin(
+    args.apiOrigin ?? `https://${args.renderService}.onrender.com`,
+    "bootstrap Render service URL",
+  );
+  const bootstrapValues = buildRenderValues(bootstrapOrigin, webOrigin);
+  renderService = await createRenderService(renderToken, args, bootstrapValues);
+}
+const apiOrigin = normalizeOrigin(
+  args.apiOrigin ?? getRenderServiceUrl(renderService),
+  "Render service URL",
+);
 
-const renderValues = requiredValues([
-  ["NODE_ENV", "production"],
-  ["RUN_INDEXER", "true"],
-  ["LOG_LEVEL", process.env.LOG_LEVEL ?? "info"],
-  ["MONAD_INDEXER_RPC_URL", process.env.MONAD_INDEXER_RPC_URL],
-  ["API_ORIGIN", apiOrigin],
-  ["CORS_ALLOWED_ORIGINS", webOrigin],
-  ["SUPABASE_URL", process.env.SUPABASE_URL],
-  ["SUPABASE_ANON_KEY", process.env.SUPABASE_ANON_KEY],
-  ["SUPABASE_SERVICE_ROLE_KEY", process.env.SUPABASE_SERVICE_ROLE_KEY],
-  ["REDIS_URL", process.env.REDIS_URL],
-  ["REDIS_TOKEN", process.env.REDIS_TOKEN],
-  ["RESEND_API_KEY", process.env.RESEND_API_KEY],
-  ["RESEND_FROM_EMAIL", process.env.RESEND_FROM_EMAIL],
-  ["CLAIM_PAYLOAD_ENC_KEYS_JSON", process.env.CLAIM_PAYLOAD_ENC_KEYS_JSON],
-  ["INVITE_STATUS_HMAC_KEYS_JSON", process.env.INVITE_STATUS_HMAC_KEYS_JSON],
-]);
+const renderValues = buildRenderValues(apiOrigin, webOrigin);
 
 const vercelValues = requiredValues([
   ["NEXT_PUBLIC_API_URL", apiOrigin],
@@ -87,24 +86,52 @@ if (args.dryRun) {
 function parseArgs(argv) {
   const parsed = {
     apiOrigin: undefined,
+    createRender: false,
     deploy: false,
     dryRun: false,
     envFile: ".env",
     renderService: "wisp-monad-api",
+    renderOwner: process.env.RENDER_OWNER_ID,
+    repo: process.env.RENDER_REPO_URL,
     webOrigin: process.env.DEPLOY_WEB_ORIGIN,
   };
   for (let index = 0; index < argv.length; index += 1) {
     const value = argv[index];
     if (value === "--") continue;
-    if (value === "--deploy") parsed.deploy = true;
+    if (value === "--create-render") parsed.createRender = true;
+    else if (value === "--deploy") parsed.deploy = true;
     else if (value === "--dry-run") parsed.dryRun = true;
     else if (value === "--api-origin") parsed.apiOrigin = argv[++index];
     else if (value === "--env-file") parsed.envFile = argv[++index];
     else if (value === "--render-service") parsed.renderService = argv[++index];
+    else if (value === "--render-owner") parsed.renderOwner = argv[++index];
+    else if (value === "--repo") parsed.repo = argv[++index];
     else if (value === "--web-origin") parsed.webOrigin = argv[++index];
     else fail(`unknown argument: ${value}`);
   }
   return parsed;
+}
+
+function buildRenderValues(apiOrigin, webOrigin) {
+  const values = requiredValues([
+    ["NODE_ENV", "production"],
+    ["RUN_INDEXER", "true"],
+    ["LOG_LEVEL", process.env.LOG_LEVEL ?? "info"],
+    ["MONAD_INDEXER_RPC_URL", process.env.MONAD_INDEXER_RPC_URL],
+    ["API_ORIGIN", apiOrigin],
+    ["CORS_ALLOWED_ORIGINS", webOrigin],
+    ["SUPABASE_URL", process.env.SUPABASE_URL],
+    ["SUPABASE_ANON_KEY", process.env.SUPABASE_ANON_KEY],
+    ["SUPABASE_SERVICE_ROLE_KEY", process.env.SUPABASE_SERVICE_ROLE_KEY],
+    ["REDIS_URL", process.env.REDIS_URL],
+    ["REDIS_TOKEN", process.env.REDIS_TOKEN],
+    ["RESEND_API_KEY", process.env.RESEND_API_KEY],
+    ["RESEND_FROM_EMAIL", process.env.RESEND_FROM_EMAIL],
+    ["CLAIM_PAYLOAD_ENC_KEYS_JSON", process.env.CLAIM_PAYLOAD_ENC_KEYS_JSON],
+    ["INVITE_STATUS_HMAC_KEYS_JSON", process.env.INVITE_STATUS_HMAC_KEYS_JSON],
+    ["INDEXER_ADMIN_TOKEN", process.env.INDEXER_ADMIN_TOKEN],
+  ]);
+  return values;
 }
 
 function normalizeOrigin(raw, label) {
@@ -139,6 +166,9 @@ function requiredValues(entries) {
 }
 
 function validateProductionValues(renderValues, vercelValues) {
+  if (Buffer.byteLength(renderValues.get("INDEXER_ADMIN_TOKEN")) < 32) {
+    fail("INDEXER_ADMIN_TOKEN must be at least 32 bytes");
+  }
   if (renderValues.get("SUPABASE_ANON_KEY") === renderValues.get("SUPABASE_SERVICE_ROLE_KEY")) {
     fail("SUPABASE_ANON_KEY and SUPABASE_SERVICE_ROLE_KEY must be different");
   }
@@ -179,9 +209,69 @@ async function findRenderService(token, name) {
   );
   const services = response.map((entry) => entry.service ?? entry);
   const service = services.find((entry) => entry.name === name);
-  if (!service) fail(`Render service not found: ${name}`);
-  if (!service.url) fail(`Render service has no public URL yet: ${name}`);
+  if (!service) return null;
+  getRenderServiceUrl(service);
   return service;
+}
+
+async function createRenderService(token, args, values) {
+  const cliCredential = readRenderCliCredential();
+  const ownerId = args.renderOwner ?? cliCredential?.workspace;
+  const repo = args.repo ?? inferGithubRepo();
+  if (!ownerId) fail("missing Render owner; pass --render-owner <workspace-id>");
+  if (!repo) fail("missing GitHub repository; pass --repo <https-url>");
+
+  return renderRequest(token, "/services", {
+    method: "POST",
+    body: JSON.stringify({
+      type: "web_service",
+      name: args.renderService,
+      ownerId,
+      repo,
+      branch: "main",
+      autoDeploy: "yes",
+      envVars: [...values].map(([key, value]) => ({ key, value })),
+      serviceDetails: {
+        runtime: "docker",
+        plan: "free",
+        region: "singapore",
+        numInstances: 1,
+        healthCheckPath: "/health",
+        envSpecificDetails: {
+          dockerContext: ".",
+          dockerfilePath: "./apps/api/Dockerfile",
+        },
+      },
+    }),
+  });
+}
+
+function getRenderServiceUrl(service) {
+  const url = service.url ?? service.serviceDetails?.url;
+  if (!url) fail(`Render service has no public URL yet: ${service.name}`);
+  return url;
+}
+
+function inferGithubRepo() {
+  const result = spawnSync("git", ["remote", "get-url", "origin"], {
+    cwd: root,
+    encoding: "utf8",
+  });
+  if (result.status !== 0) return undefined;
+  const remote = result.stdout.trim();
+  const sshPath = remote.match(/^[^:]+:([^/]+\/.+?)(?:\.git)?$/)?.[1];
+  if (sshPath) return `https://github.com/${sshPath.replace(/\.git$/, "")}`;
+  if (remote.startsWith("https://github.com/")) return remote.replace(/\.git$/, "");
+  return undefined;
+}
+
+function readRenderCliCredential() {
+  const path = process.env.RENDER_CLI_CONFIG_PATH ?? join(homedir(), ".render/cli.yaml");
+  if (!existsSync(path)) return undefined;
+  const config = readFileSync(path, "utf8");
+  const token = config.match(/^\s+key:\s*(\S+)\s*$/m)?.[1];
+  const workspace = config.match(/^workspace:\s*(\S+)\s*$/m)?.[1];
+  return token ? { token, workspace } : undefined;
 }
 
 async function syncRenderEnv(token, serviceId, desired) {
