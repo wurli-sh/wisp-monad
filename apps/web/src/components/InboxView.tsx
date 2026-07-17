@@ -542,9 +542,9 @@ export function InboxView() {
         )}
         <SegmentedTabs
           items={[
-            { value: "history", label: "History" },
-            { value: "claimable", label: "Claimable" },
             { value: "sent", label: "Sent" },
+            { value: "claimable", label: "Claimable" },
+            { value: "history", label: "History" },
           ]}
           value={tab}
           onValueChange={setTab}
