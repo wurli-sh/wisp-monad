@@ -48,3 +48,4 @@ dist/
 *.tsbuildinfo
 impl-plan.md
 .vercel
+deployment-guide.md
