@@ -4,6 +4,7 @@ import { loadConfig } from "./config.ts";
 import { createDb } from "./db/client.ts";
 import { createLogger } from "./logger.ts";
 import { createRateLimiter } from "./redis/client.ts";
+import { runIndexer } from "./indexer/run.ts";
 import { registerHealthRoutes } from "./routes/health.ts";
 import { registerMeRoutes } from "./routes/me.ts";
 import { registerResolveRoutes } from "./routes/resolve.ts";
@@ -100,20 +101,43 @@ export async function buildServer() {
   await registerInviteRoutes(app, deps, rateLimiter);
   await registerAdminRoutes(app, deps, rateLimiter);
 
-  return { app, config, log };
+  return { app, config, db, log };
 }
 
 async function main() {
-  const { app, config } = await buildServer();
+  const { app, config, db, log } = await buildServer();
+  const runEmbeddedIndexer = process.env.RUN_INDEXER === "true";
+  const indexerController = new AbortController();
+  const indexerState = { ready: false, syncing: true };
+  let indexerPromise: Promise<void> | null = null;
   let shuttingDown = false;
+
   const shutdown = async () => {
     if (shuttingDown) return;
     shuttingDown = true;
-    await app.close();
+    indexerController.abort();
+    await Promise.all([
+      app.close(),
+      indexerPromise?.catch(() => undefined) ?? Promise.resolve(),
+    ]);
   };
+
   process.once("SIGINT", () => void shutdown());
   process.once("SIGTERM", () => void shutdown());
+
   await app.listen({ port: config.port, host: "0.0.0.0" });
+
+  if (runEmbeddedIndexer) {
+    log.info("embedded indexer starting");
+    indexerPromise = runIndexer({
+      config,
+      db,
+      log,
+      state: indexerState,
+      signal: indexerController.signal,
+    });
+    await indexerPromise;
+  }
 }
 
 main().catch((err) => {

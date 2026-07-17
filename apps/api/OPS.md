@@ -55,4 +55,4 @@ Never log claim URLs, bearer tokens, signatures, or ciphertext. Pino redaction i
 
 - Free tier: 3,000 emails/mo, 100/day
 - Keep click/open tracking disabled on sending domain
-- Claim links use `/claim#p=...` fragments
+- Claim links use `/c#p=...` fragments

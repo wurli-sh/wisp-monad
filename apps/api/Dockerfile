@@ -22,4 +22,4 @@ EXPOSE 8787
 WORKDIR /app/apps/api
 USER node
 
-CMD ["pnpm", "start"]
+CMD ["node", "--import", "tsx/esm", "src/server.ts"]

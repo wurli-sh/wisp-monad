@@ -1,0 +1,22 @@
+services:
+  - type: web
+    name: wisp-monad-api
+    runtime: docker
+    plan: free
+    region: singapore
+    dockerfilePath: ./apps/api/Dockerfile
+    dockerContext: .
+    healthCheckPath: /health
+    maxShutdownDelaySeconds: 60
+    autoDeployTrigger: commit
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: RUN_INDEXER
+        value: "true"
+      - key: LOG_LEVEL
+        value: info
+      - key: MONAD_INDEXER_RPC_URL
+        value: https://testnet-rpc.monad.xyz
+      - key: INDEXER_ADMIN_TOKEN
+        generateValue: true
