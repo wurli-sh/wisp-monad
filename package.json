@@ -16,6 +16,7 @@
     "test:deployment": "node --test scripts/deploy/*.test.mjs",
     "build:circuits": "pnpm --filter @wisp/circuits build",
     "deploy:testnet": "bash scripts/deploy/monad-testnet.sh",
+    "deploy:env": "node scripts/deploy/sync-production-env.mjs",
     "smoke:phase1": "bash scripts/e2e/phase1-live-smoke.sh",
     "smoke:phase2": "bash scripts/e2e/phase2-api-smoke.sh --require-ready",
     "smoke:phase2:local": "bash scripts/e2e/phase2-api-smoke.sh",
