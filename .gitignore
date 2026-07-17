@@ -49,3 +49,6 @@ dist/
 impl-plan.md
 .vercel
 deployment-guide.md
+
+# Demo voiceover generator (local only — root ./demo/, not apps/**/demo or other paths)
+/demo/

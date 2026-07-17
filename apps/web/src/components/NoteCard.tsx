@@ -62,13 +62,13 @@ export function NoteCard({
   return (
     <div
       className={cn(
-        "radius-surface overflow-hidden border border-border/80 bg-card p-2.5 text-left shadow-card sm:p-3",
+        "relative z-0 isolate radius-surface overflow-hidden border border-border/80 bg-card p-2.5 text-left shadow-card sm:p-3",
         className,
       )}
     >
       <div
         className={cn(
-          "radius-surface-inner relative overflow-hidden bg-gradient-to-br p-5 sm:p-6",
+          "relative z-0 isolate radius-surface-inner overflow-hidden bg-gradient-to-br p-5 sm:p-6 [clip-path:inset(0_round_var(--radius-surface-inner))]",
           MESH[variant],
         )}
       >

@@ -35,13 +35,13 @@ export function WispVisaCard({
   return (
     <div
       className={cn(
-        "radius-surface overflow-hidden border border-border/80 bg-card p-2 shadow-card",
+        "relative z-0 isolate radius-surface overflow-hidden border border-border/80 bg-card p-2 shadow-card",
         className,
       )}
     >
       <div
         className={cn(
-          "radius-surface-inner relative overflow-hidden border border-brand-dark/40 bg-brand text-white",
+          "relative z-0 isolate radius-surface-inner overflow-hidden border border-brand-dark/40 bg-brand text-white [clip-path:inset(0_round_var(--radius-surface-inner))]",
           compact ? "p-5 sm:p-6" : "p-6 sm:p-7",
         )}
       >
