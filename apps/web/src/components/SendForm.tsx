@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import {
   createRegisteredNoteEnvelope,
@@ -20,7 +20,6 @@ import {
 } from "@wisp/shared";
 import {
   useConnect,
-  usePublicClient,
   useSwitchChain,
   useWriteContract,
 } from "wagmi";
@@ -39,6 +38,7 @@ import { createClient } from "@/lib/supabase/client";
 import { poolAbi, erc20Abi } from "@/lib/abis";
 import {
   manifest,
+  publicClient,
   USDC_ADDRESS,
   USDC_DECIMALS,
   transactionExplorerUrl,
@@ -64,6 +64,31 @@ type Stage =
   | "delivery_recovery"
   | "error";
 
+type SenderContext = {
+  token: string | null;
+  inboxPubkey: string | null;
+};
+
+async function loadSenderContext(): Promise<SenderContext> {
+  try {
+    const { data } = await createClient().auth.getSession();
+    const token = data.session?.access_token ?? null;
+    if (!token) return { token: null, inboxPubkey: null };
+
+    try {
+      const raw = await apiFetch<ApiMeResponse>("/v1/me", { token });
+      return {
+        token,
+        inboxPubkey: normalizeMeResponse(raw).wallet?.inboxPubkey ?? null,
+      };
+    } catch {
+      return { token, inboxPubkey: null };
+    }
+  } catch {
+    return { token: null, inboxPubkey: null };
+  }
+}
+
 function randomSecret(): bigint {
   const bytes = new Uint8Array(31);
   crypto.getRandomValues(bytes);
@@ -83,17 +108,13 @@ export function SendForm() {
   const [lockedRecipient, setLockedRecipient] = useState<string | null>(null);
   const [sentAmount, setSentAmount] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
-  const [token, setToken] = useState<string | null>(null);
-  const [senderInboxPubkey, setSenderInboxPubkey] = useState<string | null>(
-    null,
-  );
   const [emailConsent, setEmailConsent] = useState(false);
   const sendingRef = useRef(false);
+  const senderContextRef = useRef<Promise<SenderContext> | null>(null);
   const reduce = useReducedMotion();
 
   const { connectAsync } = useConnect();
   const { switchChainAsync } = useSwitchChain();
-  const publicClient = usePublicClient();
   const { writeContractAsync } = useWriteContract();
 
   const pool = useMemo(
@@ -101,48 +122,41 @@ export function SendForm() {
     [denom],
   );
 
-  useEffect(() => {
-    try {
-      createClient()
-        .auth.getSession()
-        .then(async ({ data }) => {
-          const accessToken = data.session?.access_token ?? null;
-          setToken(accessToken);
-          if (accessToken) {
-            const raw = await apiFetch<ApiMeResponse>("/v1/me", {
-              token: accessToken,
-            });
-            setSenderInboxPubkey(
-              normalizeMeResponse(raw).wallet?.inboxPubkey ?? null,
-            );
-          }
-        })
-        .catch(() => {
-          setToken(null);
-          setSenderInboxPubkey(null);
-        });
-    } catch {
-      setToken(null);
-    }
+  const getSenderContext = useCallback(() => {
+    senderContextRef.current ??= loadSenderContext();
+    return senderContextRef.current;
   }, []);
 
+  useEffect(() => {
+    void getSenderContext();
+  }, [getSenderContext]);
+
   async function ensureWallet(): Promise<`0x${string}`> {
-    if (!getAccount(wagmiConfig).address) {
-      await connectAsync({ connector: injected() });
+    const initial = getAccount(wagmiConfig);
+    let address = initial.address;
+    let chainId = initial.chainId;
+
+    if (!address) {
+      setStage("wallet_required");
+      const connected = await connectAsync({ connector: injected() });
+      address = connected.accounts[0];
+      chainId = connected.chainId;
     }
-    if (getAccount(wagmiConfig).chainId !== monadTestnet.id) {
+    if (chainId !== monadTestnet.id) {
       setStage("wrong_chain");
-      await switchChainAsync({ chainId: monadTestnet.id });
+      const chain = await switchChainAsync({ chainId: monadTestnet.id });
+      chainId = chain.id;
     }
-    const current = getAccount(wagmiConfig);
-    if (!current.address) throw new Error("Wallet not connected");
-    if (current.chainId !== monadTestnet.id) {
+    if (!address) throw new Error("Wallet not connected");
+    if (chainId !== monadTestnet.id) {
       throw new Error("Switch your wallet to Monad testnet");
     }
-    return current.address;
+    return address;
   }
 
   async function recordSentActivity(params: {
+    token: string | null;
+    senderInboxPubkey: string | null;
     recipient: string;
     displayRecipient: string;
     denomination: bigint;
@@ -151,10 +165,10 @@ export function SendForm() {
     depositTxHash: `0x${string}`;
     delivery: SentDeliveryKind;
   }): Promise<void> {
-    if (!token || !senderInboxPubkey) return;
+    if (!params.token || !params.senderInboxPubkey) return;
     const ephemeralSecret = crypto.getRandomValues(new Uint8Array(32));
     const encrypted = encryptEnvelope(
-      hexToBytes(senderInboxPubkey),
+      hexToBytes(params.senderInboxPubkey),
       ephemeralSecret,
       encodeSentActivity({
         v: 1,
@@ -171,9 +185,9 @@ export function SendForm() {
     );
     await apiFetch("/v1/activity", {
       method: "POST",
-      token,
+      token: params.token,
       body: {
-        recipientPubkey: senderInboxPubkey,
+        recipientPubkey: params.senderInboxPubkey,
         ephemeralPubkey: bytesToHex(encrypted.ephemeralPubkey),
         nonce: bytesToHex(encrypted.nonce),
         ciphertext: bytesToHex(encrypted.ciphertext),
@@ -182,7 +196,7 @@ export function SendForm() {
   }
 
   async function send() {
-    if (!pool || !publicClient || sendingRef.current) return;
+    if (!pool || sendingRef.current) return;
     sendingRef.current = true;
     setError(null);
     setRecoveryUrl(null);
@@ -194,9 +208,13 @@ export function SendForm() {
       const recipient = to.trim();
       if (!recipient) throw new Error("Enter a recipient");
       setStage("resolving");
-      const resolve = await apiFetch<ResolveResult>(
-        `/v1/resolve?q=${encodeURIComponent(recipient)}`,
-      );
+      const [resolve, senderContext] = await Promise.all([
+        apiFetch<ResolveResult>(
+          `/v1/resolve?q=${encodeURIComponent(recipient)}`,
+        ),
+        getSenderContext(),
+      ]);
+      const activeToken = senderContext.token;
       const displayRecipient =
         resolve.found && resolve.displayHandle
           ? resolve.displayHandle
@@ -215,13 +233,15 @@ export function SendForm() {
             "Resolved recipient deployment does not match this app",
           );
         }
-        if (!token) {
+        if (!activeToken) {
           throw new Error("Sign in before sending to a registered inbox");
         }
       }
       if (!resolve.found && looksEmail) {
         if (!emailConsent) throw new Error("Email consent required");
-        if (!token) throw new Error("Sign in before sending an email invite");
+        if (!activeToken) {
+          throw new Error("Sign in before sending an email invite");
+        }
       }
 
       const sender = await ensureWallet();
@@ -361,10 +381,10 @@ export function SendForm() {
           : "claim_link";
       let deliveryFailed = false;
       try {
-        if (resolve.found && envelope && token) {
+        if (resolve.found && envelope && activeToken) {
           await apiFetch("/v1/notes", {
             method: "POST",
-            token,
+            token: activeToken,
             body: envelope,
           });
         } else if (!resolve.found) {
@@ -384,7 +404,7 @@ export function SendForm() {
             }
             await apiFetch("/v1/invites", {
               method: "POST",
-              token,
+              token: activeToken,
               body: {
                 normalizedHandle: recipient.toLowerCase(),
                 deliveryKind: "email",
@@ -416,6 +436,8 @@ export function SendForm() {
 
       try {
         await recordSentActivity({
+          token: activeToken,
+          senderInboxPubkey: senderContext.inboxPubkey,
           recipient,
           displayRecipient:
             resolve.found && resolve.displayHandle
@@ -448,6 +470,16 @@ export function SendForm() {
 
   const cardRecipient = lockedRecipient ?? "…";
   const cardAmount = sentAmount ?? formatUnits(denom, 6);
+  const progressLabel: Partial<Record<Stage, string>> = {
+    resolving: "Checking recipient…",
+    wallet_required: "Connecting wallet…",
+    wrong_chain: "Switching network…",
+    ready: "Checking balance…",
+    approving: "Approving USDC…",
+    depositing: "Sending…",
+    delivering: "Delivering…",
+  };
+  const activeProgress = progressLabel[stage];
 
   async function copyClaimLink(url: string) {
     await navigator.clipboard.writeText(url);
@@ -539,19 +571,14 @@ export function SendForm() {
             disabled={
               !pool ||
               !to.trim() ||
-              stage === "resolving" ||
-              stage === "approving" ||
-              stage === "depositing" ||
-              stage === "delivering"
+              Boolean(activeProgress)
             }
+            aria-busy={Boolean(activeProgress)}
             onClick={() => void send()}
             className="w-full border-brand-dark/30 bg-brand text-base font-semibold text-brand-foreground shadow-action hover:bg-brand-dark sm:min-h-12 sm:text-lg"
           >
-            {stage === "resolving" ||
-            stage === "approving" ||
-            stage === "depositing" ||
-            stage === "delivering" ? (
-              <TextShimmer>Working…</TextShimmer>
+            {activeProgress ? (
+              <TextShimmer>{activeProgress}</TextShimmer>
             ) : (
               <>
                 <Send className="h-4 w-4" aria-hidden="true" />

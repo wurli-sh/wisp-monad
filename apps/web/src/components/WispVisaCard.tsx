@@ -130,12 +130,14 @@ export function MotionPillButton({
   children,
   className,
   disabled,
+  "aria-busy": ariaBusy,
   onClick,
   type = "button",
 }: {
   children: ReactNode;
   className?: string;
   disabled?: boolean;
+  "aria-busy"?: boolean;
   onClick?: () => void;
   type?: "button" | "submit" | "reset";
 }) {
@@ -145,6 +147,7 @@ export function MotionPillButton({
       data-motion-button
       type={type}
       disabled={disabled}
+      aria-busy={ariaBusy || undefined}
       onClick={onClick}
       whileTap={disabled || reduce ? undefined : buttonTap}
       className={cn(
