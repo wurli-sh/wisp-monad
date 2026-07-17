@@ -3,7 +3,17 @@
 import { useCallback, useEffect, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
-import { Check, Copy, ExternalLink, Link2Off, Mail, RefreshCw, X } from "lucide-react";
+import {
+  AtSign,
+  Check,
+  Copy,
+  ExternalLink,
+  Link2Off,
+  Mail,
+  RefreshCw,
+  ShieldCheck,
+  X,
+} from "lucide-react";
 import { ApiClientError, apiFetch } from "@/lib/api";
 import { createClient } from "@/lib/supabase/client";
 import { toSupabaseProvider } from "@/lib/supabase/providers";
@@ -21,7 +31,7 @@ import {
 } from "@/lib/api-contracts";
 
 function ProviderIcon({ provider }: { provider: string }) {
-  const className = "h-4 w-4 shrink-0 text-muted-foreground";
+  const className = "h-4 w-4 shrink-0 text-brand-ink";
   if (provider === "google") return <GoogleIcon className={className} />;
   if (provider === "x") return <XBrandIcon className={className} />;
   return <Mail className={className} aria-hidden="true" />;
@@ -169,13 +179,18 @@ export function AccountView() {
 
       {tab === "handles" && (
         <section className="radius-surface overflow-hidden border border-border/80 bg-card shadow-card">
-          <div className="border-b border-border/70 px-5 py-4 sm:px-6">
-            <h2 className="text-sm font-semibold text-foreground">
-              Connected identities
-            </h2>
-            <p className="mt-1 text-sm text-muted-foreground">
-              X is verified — no free-form @handles.
-            </p>
+          <div className="flex items-start gap-3 border-b border-brand-muted/70 bg-brand-mist px-5 py-4 sm:px-6">
+            <span className="flex size-9 shrink-0 items-center justify-center rounded-xl border border-brand-muted bg-brand-soft text-brand-ink">
+              <AtSign className="h-4 w-4" aria-hidden="true" />
+            </span>
+            <div>
+              <h2 className="text-sm font-semibold text-foreground">
+                Connected identities
+              </h2>
+              <p className="mt-1 text-sm text-muted-foreground">
+                X is verified — no free-form @handles.
+              </p>
+            </div>
           </div>
           <div className="space-y-4 p-5 sm:p-6">
             {me?.handles.length ? (
@@ -186,7 +201,7 @@ export function AccountView() {
                     className="radius-surface-inner flex items-center justify-between gap-3 border border-border/70 px-4 py-3"
                   >
                     <div className="flex min-w-0 items-start gap-3">
-                      <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg border border-border/70 bg-muted">
+                      <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg border border-brand-muted/70 bg-brand-mist">
                         <ProviderIcon provider={h.provider} />
                       </span>
                       <div className="min-w-0">
@@ -219,7 +234,6 @@ export function AccountView() {
             {!me?.handles.some((handle) => handle.provider === "x") && (
               <Button
                 className="w-full"
-                variant="secondary"
                 disabled={busy}
                 onClick={() => void linkX()}
               >
@@ -233,13 +247,18 @@ export function AccountView() {
 
       {tab === "wallet" && (
         <section className="radius-surface overflow-hidden border border-border/80 bg-card shadow-card">
-          <div className="border-b border-border/70 px-5 py-4 sm:px-6">
-            <h2 className="text-sm font-semibold text-foreground">
-              Wallet connection
-            </h2>
-            <p className="mt-1 text-sm text-muted-foreground">
-              This wallet unlocks your private inbox.
-            </p>
+          <div className="flex items-start gap-3 border-b border-brand-muted/70 bg-brand-mist px-5 py-4 sm:px-6">
+            <span className="flex size-9 shrink-0 items-center justify-center rounded-xl border border-brand-muted bg-brand-soft text-brand-ink">
+              <ShieldCheck className="h-4 w-4" aria-hidden="true" />
+            </span>
+            <div>
+              <h2 className="text-sm font-semibold text-foreground">
+                Wallet connection
+              </h2>
+              <p className="mt-1 text-sm text-muted-foreground">
+                This wallet unlocks your private inbox.
+              </p>
+            </div>
           </div>
           <div className="space-y-5 p-5 sm:p-6">
             {me?.wallet && !replacing ? (
@@ -248,7 +267,7 @@ export function AccountView() {
                   <p className="text-sm font-medium text-foreground">
                     Linked EVM address
                   </p>
-                  <p className="radius-surface-inner border border-border/70 bg-muted px-4 py-3 font-mono text-xs text-foreground">
+                  <p className="radius-surface-inner border border-brand-muted/70 bg-brand-mist px-4 py-3 font-mono text-xs text-brand-ink">
                     {me.wallet.address}
                   </p>
                   <div className="flex flex-wrap gap-2">
