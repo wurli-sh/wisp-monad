@@ -32,6 +32,7 @@ const BLOCK_RANGE = 100n;
 // one ordered, lease-protected cursor advance.
 const LOG_QUERY_BATCHES = 10n;
 const LEASE_TTL_SECONDS = 120;
+const IDLE_POLL_INTERVAL_MS = 2_000;
 
 export type IndexerRuntimeState = {
   ready: boolean;
@@ -78,7 +79,7 @@ export async function runIndexer(params: {
     let failureDelayMs = 2_000;
     while (!signal.aborted) {
       let cycleOk = true;
-      let processed = 0;
+      let advancedBlocks = 0;
       state.syncing = true;
 
       const results = await Promise.all(
@@ -104,13 +105,14 @@ export async function runIndexer(params: {
         }),
       );
       cycleOk = results.every((result) => result !== null);
-      processed = results.reduce<number>((total, result) => total + (result ?? 0), 0);
+      advancedBlocks = results.reduce<number>((total, result) => total + (result ?? 0), 0);
 
       state.ready = cycleOk;
-      state.syncing = !cycleOk || processed > 0;
+      state.syncing = !cycleOk || advancedBlocks > 0;
       if (cycleOk) failureDelayMs = 2_000;
       else failureDelayMs = Math.min(failureDelayMs * 2, 60_000);
-      await abortableSleep(cycleOk ? 2_000 : failureDelayMs, signal);
+      const delayMs = nextIndexerCycleDelayMs(cycleOk, advancedBlocks, failureDelayMs);
+      if (delayMs > 0) await abortableSleep(delayMs, signal);
     }
   } finally {
     state.ready = false;
@@ -264,7 +266,16 @@ async function processPool(params: {
   });
   if (applyError) throw applyError;
   if (applied !== true) throw new Error("indexer cursor changed concurrently");
-  return logs.length;
+  return Number(toBlock - fromBlock + 1n);
+}
+
+export function nextIndexerCycleDelayMs(
+  cycleOk: boolean,
+  advancedBlocks: number,
+  failureDelayMs: number,
+): number {
+  if (!cycleOk) return failureDelayMs;
+  return advancedBlocks > 0 ? 0 : IDLE_POLL_INTERVAL_MS;
 }
 
 async function hydrateTree(db: Db, chainId: number, pool: string): Promise<IncrementalMerkleTree> {
