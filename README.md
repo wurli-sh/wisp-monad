@@ -1,6 +1,6 @@
 <img src="docs/assets/banner.png" width="100%" alt="Wisp on Monad" />
 
-[Live demo](https://wisp-monad.vercel.app/) · [Demo video](#) · [Super Launch I](#)
+[Live demo](https://wisp-monad.vercel.app/) · [Demo video](https://youtu.be/ov0ITk1vqZ8) · [Super Launch](https://youtu.be/be6H-aRNKw8)
 
 ## Problem
 
@@ -209,11 +209,10 @@ Runbooks: [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) · [`apps/api/OPS.md`](apps
 
 ---
 
-## Super Launch Trailer
+## Super Launch
 
 Watch the Wisp Super Launch trailer:
 
-<!-- Replace # with the YouTube URL when available -->
-<a href="#" aria-label="Watch the Wisp Super Launch trailer on YouTube">
-  <img src="docs/assets/banner.png" width="100%" alt="Wisp Super Launch trailer — link coming soon" />
+<a href="https://youtu.be/be6H-aRNKw8" aria-label="Watch the Wisp Super Launch trailer on YouTube">
+  <img src="docs/assets/banner.png" width="100%" alt="Wisp Super Launch trailer" />
 </a>
