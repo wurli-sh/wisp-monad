@@ -1,5 +1,7 @@
 <img src="docs/assets/banner.png" width="100%" alt="Wisp on Monad" />
 
+**Winner of the [Spark Monad Hackathon](https://buildanything.so/hackathons/spark).**
+
 [Live demo](https://wisp-monad.vercel.app/) · [Demo video](https://youtu.be/ov0ITk1vqZ8) · [Super Launch](https://youtu.be/be6H-aRNKw8)
 
 ## Problem
